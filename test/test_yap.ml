@@ -41,6 +41,10 @@ let test_matrix_and_render root =
   assert_true (contains "`/skill:iiuc`" (get "pi")) "pi invocation rendered";
   assert_true (contains "`/iiuc`" (get "claude")) "claude invocation rendered";
   assert_true (contains "`$iiuc`" (get "codex")) "codex invocation rendered";
+  let commit_fmt = rendered |> List.find (fun (h, _) -> h.Harness.id = "claude") |> snd |> List.assoc "commit-fmt" in
+  assert_true (contains "For humans" commit_fmt) "commit-fmt has a human section";
+  assert_true (contains "For LLMs" commit_fmt) "commit-fmt has an LLM section";
+  assert_true (contains "ELI5" commit_fmt) "commit-fmt keeps the ELI5";
   rendered
   |> List.iter (fun (_, rows) ->
       rows |> List.iter (fun (_, body) -> assert_true (not (contains "{{" body)) "unresolved variable"))
@@ -83,7 +87,7 @@ let test_install root =
     Filename.concat (Filename.concat (Filename.concat (Filename.concat target ".pi") "skills") "iiuc") "SKILL.md"
   in
   let prompt = Filename.concat (Filename.concat (Filename.concat target ".pi") "prompts") "iiuc.md" in
-  assert_true (written = [ dest; prompt ]) "pi install writes skill and prompt template";
+  assert_true (List.mem dest written && List.mem prompt written) "pi install writes skill and prompt template";
   assert_true (contains "/iiuc" (Fs_util.read_file prompt)) "prompt template names /iiuc";
   assert_true (contains "${ARGUMENTS:-}" (Fs_util.read_file prompt)) "prompt template forwards arguments";
   assert_true (Sys.file_exists dest) "installed file exists";
@@ -107,7 +111,7 @@ let test_install_global root =
   let written = Core.install root base "pi" Core.Global false in
   let dest = Filename.concat (Filename.concat (Filename.concat base "skills") "iiuc") "SKILL.md" in
   let prompt = Filename.concat (Filename.concat base "prompts") "iiuc.md" in
-  assert_true (written = [ dest; prompt ]) "global pi install writes skills/ and prompts/";
+  assert_true (List.mem dest written && List.mem prompt written) "global pi install writes skills/ and prompts/";
   let lock = Fs_util.read_file (Filename.concat (Filename.concat base "skills") "yap-skills.lock.json") in
   assert_true (contains "\"scope\": \"global\"" lock) "global lock records scope"
 

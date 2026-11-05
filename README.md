@@ -15,6 +15,7 @@ Version 0.1.0 contains the authoring toolchain and one implemented skill:
 | Skill | Job | Status |
 |---|---|---|
 | `iiuc` | Turn messy or dictated input into a TL;DR and IIUC playback, then stop for confirmation | implemented |
+| `commit-fmt` | Draft a commit message: TL;DR, For humans (ELI5, Problem, Solution), For LLMs (changed, contracts, verification, risk) | implemented |
 
 The designed roster in bp3-docs also names `ask`, `red-chair`, `search`,
 `teach`, `dossier`, `swipe`, `tldr`, `debug`, `verify`, and `add-skill`.
