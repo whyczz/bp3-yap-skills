@@ -45,6 +45,8 @@ dune exec yap -- install --root . --harness pi -p --target /path/to/project
 dune exec yap -- install --root . --harness pi -g
 dune exec yap -- new <skill-id> --description "<one sentence>"
 ./scripts/install-hooks.sh        # enable the committed pre-commit gate
+make install                      # dune install: put the yap binary in the switch
+make install-skills               # install skills globally (HARNESS=pi by default)
 ```
 
 Rendered output is plain Markdown under `generated/<harness>/`: a portable

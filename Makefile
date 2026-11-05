@@ -1,4 +1,6 @@
-.PHONY: build check test fmt hooks install
+HARNESS ?= pi
+
+.PHONY: build check test fmt hooks install install-skills
 
 build:
 	dune build
@@ -18,3 +20,6 @@ hooks:
 
 install:
 	dune install
+
+install-skills: build
+	dune exec yap -- install --root . --harness $(HARNESS) -g
