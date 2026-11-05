@@ -25,7 +25,7 @@ Version 0.1.0 contains the authoring toolchain and one implemented skill:
 | `tldr` | Read-only primer over a diff for a human reviewer | implemented |
 | `debug` | Root cause proven before any fix | implemented |
 | `verify` | Fresh checks and exact outputs before "done" | implemented |
-| `commit-fmt` | Commit message: TL;DR, For humans, For LLMs | implemented |
+| `commit` | Commit message: TL;DR, For humans, For LLMs | implemented |
 | `add-skill` | Gatekeeper for adding the next skill | implemented |
 
 The full designed roster from bp3-docs is implemented above. The next
@@ -56,8 +56,9 @@ dune exec yap -- install --root . --harness pi -g
 dune exec yap -- new <skill-id> --description "<one sentence>"
 ./scripts/install-hooks.sh        # enable the committed pre-commit gate
 make install                      # dune install: put the yap binary in the switch
-make install-skills               # install skills: [harness] [global|local-dir]
+make install-skills               # install skills: [harness|all] [global|local-dir]
                                   #   make install-skills pi global
+                                  #   make install-skills all        (all harnesses, global)
                                   #   make install-skills pi local-dir DIR=/path/to/project
 ```
 
@@ -89,7 +90,7 @@ Install scope is explicit and mutually exclusive: `-p`/`--project` or
 and `<project>/.pi/prompts/<id>.md`. Global pi writes
 `~/.pi/agent/skills/<id>/SKILL.md` and `~/.pi/agent/prompts/<id>.md`
 (or under `$PI_CODING_AGENT_DIR`). Other harnesses take their conventional
-global bases (`~/.claude`, `~/.agents`). Installs record scope, harness,
+global bases (`~/.claude`, `~/.agents`, `~/.config/muse`). Installs record scope, harness,
 and SHA-style content hashes in `yap-skills.lock.json` beside the skills,
 and refuse to overwrite a file they did not install unless `--force` is
 given. Global yap skills are the default way the CEO gets `/iiuc`

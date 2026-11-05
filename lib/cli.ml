@@ -99,7 +99,12 @@ let default_global_base harness_id =
       | Some dir -> dir
       | None -> Filename.concat (Filename.concat home ".pi") "agent")
   | "claude" -> Filename.concat home ".claude"
-  | "codex" | "muse" -> Filename.concat home ".agents"
+  | "codex" -> Filename.concat home ".agents"
+  | "muse" ->
+      let config_home =
+        match Sys.getenv_opt "XDG_CONFIG_HOME" with Some dir -> dir | None -> Filename.concat home ".config"
+      in
+      Filename.concat config_home "muse"
   | other -> failwith ("unknown harness: " ^ other)
 
 let run_install root json harness_flags target project global force =
@@ -136,8 +141,8 @@ let install_cmd =
       & opt (some string) None
       & info [ "target" ] ~docv:"DIR"
           ~doc:
-            "With -p: the project directory. With -g: the harness global base (defaults: pi ~/.pi/agent, \
-             claude              ~/.claude, codex/muse ~/.agents).")
+            "With -p: the project directory. With -g: the harness global base (defaults: pi ~/.pi/agent, claude \
+             ~/.claude, codex ~/.agents, muse ~/.config/muse).")
   in
   let project = Arg.(value & flag & info [ "p"; "project" ] ~doc:"Install per project (explicit project scope).") in
   let global = Arg.(value & flag & info [ "g"; "global" ] ~doc:"Install globally for this harness and user.") in

@@ -129,11 +129,17 @@ let render_prompt_source root harness source =
           match split_frontmatter body with
           | None -> None
           | Some (fields, rest) ->
-              let description = Option.value (List.assoc_opt "description" fields) ~default:"" in
+              let raw_description = Option.value (List.assoc_opt "description" fields) ~default:"" in
+              let description =
+                if String.length raw_description >= 2 && raw_description.[0] = '"' then
+                  try Yojson.Safe.from_string raw_description |> Yojson.Safe.Util.to_string with _ -> raw_description
+                else raw_description
+              in
               Some
                 (Printf.sprintf
                    "---\ndescription: %s\nargument-hint: \"[request]\"\n---\n%s\n\nUser request: ${ARGUMENTS:-}\n"
-                   description (String.trim rest))))
+                   (Yojson.Safe.to_string (`String description))
+                   (String.trim rest))))
 
 let write_rendered root out_dir harness_ids =
   render_all root harness_ids
@@ -354,7 +360,18 @@ let lint root =
                       (Printf.sprintf "%s [%s]: frontmatter name is %s" skill_id harness.Harness.id
                          (Option.value (List.assoc_opt "name" fields) ~default:"<missing>"));
                   if Option.value (List.assoc_opt "description" fields) ~default:"" = "" then
-                    add "error" (Printf.sprintf "%s [%s]: empty description" skill_id harness.Harness.id))));
+                    add "error" (Printf.sprintf "%s [%s]: empty description" skill_id harness.Harness.id);
+                  let raw_description = Option.value (List.assoc_opt "description" fields) ~default:"" in
+                  let quoted =
+                    String.length raw_description >= 2
+                    && raw_description.[0] = '"'
+                    && raw_description.[String.length raw_description - 1] = '"'
+                  in
+                  if contains ": " raw_description && not quoted then
+                    add "error"
+                      (Printf.sprintf
+                         "%s [%s]: frontmatter description contains an unquoted colon (invalid YAML); quote it" skill_id
+                         harness.Harness.id))));
   List.rev !diagnostics
 
 let scaffold root skill_id description =

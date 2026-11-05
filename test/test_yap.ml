@@ -41,10 +41,10 @@ let test_matrix_and_render root =
   assert_true (contains "`/skill:iiuc`" (get "pi")) "pi invocation rendered";
   assert_true (contains "`/iiuc`" (get "claude")) "claude invocation rendered";
   assert_true (contains "`$iiuc`" (get "codex")) "codex invocation rendered";
-  let commit_fmt = rendered |> List.find (fun (h, _) -> h.Harness.id = "claude") |> snd |> List.assoc "commit-fmt" in
-  assert_true (contains "For humans" commit_fmt) "commit-fmt has a human section";
-  assert_true (contains "For LLMs" commit_fmt) "commit-fmt has an LLM section";
-  assert_true (contains "ELI5" commit_fmt) "commit-fmt keeps the ELI5";
+  let commit_skill = rendered |> List.find (fun (h, _) -> h.Harness.id = "claude") |> snd |> List.assoc "commit" in
+  assert_true (contains "For humans" commit_skill) "commit has a human section";
+  assert_true (contains "For LLMs" commit_skill) "commit has an LLM section";
+  assert_true (contains "ELI5" commit_skill) "commit keeps the ELI5";
   let design = rendered |> List.find (fun (h, _) -> h.Harness.id = "claude") |> snd |> List.assoc "design" in
   assert_true (contains "Data models" design) "design covers data models";
   assert_true (contains "Proposed milestones" design) "design proposes milestones";
@@ -55,6 +55,16 @@ let test_matrix_and_render root =
   rendered
   |> List.iter (fun (_, rows) ->
       rows |> List.iter (fun (_, body) -> assert_true (not (contains "{{" body)) "unresolved variable"))
+
+let test_tldr_prompt_frontmatter_is_valid_yaml root =
+  let harnesses = Harness.load root in
+  let pi = match Harness.find harnesses "pi" with Some harness -> harness | None -> fail "missing pi" in
+  let source = Filename.concat (Filename.concat (Filename.concat root "skills") "tldr") "SKILL.md.j2" in
+  match Core.render_prompt_source root pi source with
+  | None -> fail "tldr prompt must render for pi"
+  | Some prompt ->
+      assert_true (String.starts_with ~prefix:"---\ndescription: \"" prompt) "prompt description must be quoted YAML";
+      assert_true (contains "change: shape" prompt) "quoted description keeps its colon content"
 
 let test_lint root =
   let errors = Core.lint root |> List.filter (fun d -> d.Core.level = "error") in
@@ -72,6 +82,22 @@ let make_fixture () =
     (Fs_util.read_file
        (Filename.concat (Filename.concat (Filename.concat repo_root "templates") "skill") "SKILL.md.j2"));
   root
+
+let test_lint_rejects_unquoted_colon () =
+  let root = make_fixture () in
+  let dest = Core.scaffold root "demo-skill" "Does a thing: with a colon" in
+  let body = Fs_util.read_file dest |> String.split_on_char '\n' in
+  let body =
+    body
+    |> List.map (fun line ->
+        if String.starts_with ~prefix:"description:" line then "description: Does a thing: with a colon" else line)
+    |> String.concat "\n"
+  in
+  Fs_util.write_file dest body;
+  let errors = Core.lint root |> List.map (fun d -> d.Core.message) in
+  assert_true
+    (List.exists (fun message -> contains "unquoted colon" message) errors)
+    "lint must reject an unquoted colon in a frontmatter description"
 
 let test_scaffold () =
   let root = make_fixture () in
@@ -125,9 +151,7 @@ let test_install_global root =
 let test_install_many root =
   let target = Filename.temp_dir "yap-many-" "" in
   let written = Core.install_many root [ ("pi", target); ("claude", target) ] Core.Project false in
-  assert_true
-    (List.exists (fun path -> contains "commit-fmt" path) written)
-    "multi-harness install writes both harnesses";
+  assert_true (List.exists (fun path -> contains "commit" path) written) "multi-harness install writes both harnesses";
   let clash_target = Filename.temp_dir "yap-clash-" "" in
   let refused =
     try
@@ -168,6 +192,8 @@ let () =
   let root = find_root (Sys.getcwd ()) 10 in
   test_matrix_and_render root;
   test_lint root;
+  test_tldr_prompt_frontmatter_is_valid_yaml root;
+  test_lint_rejects_unquoted_colon ();
   test_scaffold ();
   test_install root;
   test_install_global root;
