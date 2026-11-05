@@ -45,6 +45,13 @@ let test_matrix_and_render root =
   assert_true (contains "For humans" commit_fmt) "commit-fmt has a human section";
   assert_true (contains "For LLMs" commit_fmt) "commit-fmt has an LLM section";
   assert_true (contains "ELI5" commit_fmt) "commit-fmt keeps the ELI5";
+  let design = rendered |> List.find (fun (h, _) -> h.Harness.id = "claude") |> snd |> List.assoc "design" in
+  assert_true (contains "Data models" design) "design covers data models";
+  assert_true (contains "Proposed milestones" design) "design proposes milestones";
+  assert_true (contains "supersedes this document" design) "design yields to the packet once building starts";
+  assert_true (contains "four red-chair passes" design) "design runs four implicit red-chair passes";
+  assert_true (contains "User input" design && contains "Problem space" design) "passes cover input and problem";
+  assert_true (contains "Milestones" design && contains "Red chair record" design) "passes end in a record";
   rendered
   |> List.iter (fun (_, rows) ->
       rows |> List.iter (fun (_, body) -> assert_true (not (contains "{{" body)) "unresolved variable"))

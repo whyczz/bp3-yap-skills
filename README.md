@@ -20,6 +20,7 @@ Version 0.1.0 contains the authoring toolchain and one implemented skill:
 | `red-chair` | Read-only adversarial pass with next steps | implemented |
 | `teach` | First-principles explanation grounded in the repo | implemented |
 | `dossier` | Deep-dive learning document; explores, never decides | implemented |
+| `design` | Proposed design: context, data models, functions, storage, milestones | implemented |
 | `swipe` | External-repo adoption report with citations | implemented |
 | `tldr` | Read-only primer over a diff for a human reviewer | implemented |
 | `debug` | Root cause proven before any fix | implemented |
