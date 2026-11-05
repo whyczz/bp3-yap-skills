@@ -37,19 +37,33 @@ generated/                      render output (not committed)
 Requirements: OCaml 5.1+, opam, and dune. Build once with `opam install . --deps-only` (or use an existing switch with cmdliner and yojson), then `dune build`. Installed skills are plain Markdown with no runtime dependency.
 
 ```sh
-make check                        # build + yap check + tests
-dune exec yap -- check --root .
+make check                        # build + dune render check + tests
+dune build @render                # canonical check: lint and render every harness
 dune exec yap -- render --root . --harness pi
-dune exec yap -- render --root . --all
-dune exec yap -- install --root . --harness pi --target /path/to/project
+dune exec yap -- install --root . --harness pi -p --target /path/to/project
+dune exec yap -- install --root . --harness pi -g
 dune exec yap -- new <skill-id> --description "<one sentence>"
 ./scripts/install-hooks.sh        # enable the committed pre-commit gate
 ```
 
-`install --harness pi` is the tested v1 path. It writes rendered skills to
-`<target>/.pi/skills/<skill-id>/SKILL.md` and records hashes in
-`<target>/.pi/skills/yap-skills.lock.json`. It refuses to overwrite a file
-it did not install unless `--force` is given.
+Rendered output is plain Markdown under `generated/<harness>/`: a portable
+`SKILL.md` per skill, plus, for pi only, a prompt template at
+`.pi/prompts/<skill>.md`. That template is what gives pi the exact
+`/<skill>` command (for example `/iiuc`); the skill itself remains
+available as `/skill:<skill>`.
+
+Install scope is explicit and mutually exclusive: `-p`/`--project` or
+`-g`/`--global`. Per project, pi writes `<project>/.pi/skills/<id>/SKILL.md`
+and `<project>/.pi/prompts/<id>.md`. Global pi writes
+`~/.pi/agent/skills/<id>/SKILL.md` and `~/.pi/agent/prompts/<id>.md`
+(or under `$PI_CODING_AGENT_DIR`). Other harnesses take their conventional
+global bases (`~/.claude`, `~/.agents`). Installs record scope, harness,
+and SHA-style content hashes in `yap-skills.lock.json` beside the skills,
+and refuse to overwrite a file they did not install unless `--force` is
+given. Global yap skills are the default way the CEO gets `/iiuc`
+everywhere; per-project installs pin or override a version for one repo,
+and the installer refuses to layer a second harness variant into a root
+already managed for another harness.
 
 ## Authoring rules
 

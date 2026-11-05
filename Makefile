@@ -4,7 +4,7 @@ build:
 	dune build
 
 check: build
-	dune exec yap -- check --root .
+	dune build @render
 	dune test
 
 test:

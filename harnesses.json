@@ -3,24 +3,31 @@
     "display": "pi",
     "skills_dir": ".pi/skills",
     "invocation": "/skill:{skill}",
+    "command_invocation": "/{skill}",
+    "prompts_dir": ".pi/prompts",
+    "global_skills_dir": "skills",
+    "global_prompts_dir": "prompts",
     "tested": true
   },
   "claude": {
     "display": "Claude",
     "skills_dir": ".claude/skills",
     "invocation": "/{skill}",
+    "global_skills_dir": "skills",
     "tested": false
   },
   "codex": {
     "display": "Codex",
     "skills_dir": ".agents/skills",
     "invocation": "${skill}",
-    "tested": false
+    "global_skills_dir": "skills",
+    "tested": true
   },
   "muse": {
     "display": "Muse",
     "skills_dir": ".agents/skills",
     "invocation": "/{skill}",
-    "tested": false
+    "global_skills_dir": "skills",
+    "tested": true
   }
 }

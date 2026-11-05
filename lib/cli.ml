@@ -59,9 +59,29 @@ let render_cmd =
     (Cmd.info "render" ~doc:"Render skills for one or all harnesses.")
     (capture Term.(const run_render $ root_term $ json_term $ harness $ all $ out))
 
-let run_install root json harness target force =
+let default_global_base harness_id =
+  let home = match Sys.getenv_opt "HOME" with Some home -> home | None -> failwith "HOME is not set" in
+  match harness_id with
+  | "pi" -> (
+      match Sys.getenv_opt "PI_CODING_AGENT_DIR" with
+      | Some dir -> dir
+      | None -> Filename.concat (Filename.concat home ".pi") "agent")
+  | "claude" -> Filename.concat home ".claude"
+  | "codex" | "muse" -> Filename.concat home ".agents"
+  | other -> failwith ("unknown harness: " ^ other)
+
+let run_install root json harness target project global force =
   try
-    let written = Core.install root target harness force in
+    let scope, resolved_target =
+      match (project, global, target) with
+      | true, false, Some target -> (Core.Project, target)
+      | true, false, None -> failwith "install -p needs --target DIR (the project directory)"
+      | false, true, Some base -> (Core.Global, base)
+      | false, true, None -> (Core.Global, default_global_base harness)
+      | false, false, _ -> failwith "choose exactly one install scope: -p/--project or -g/--global"
+      | true, true, _ -> failwith "install scopes are mutually exclusive: choose -p/--project or -g/--global"
+    in
+    let written = Core.install root resolved_target harness scope force in
     if json then `List (written |> List.map (fun path -> `String path)) |> Yojson.Safe.to_string |> print_endline
     else written |> List.iter print_endline;
     0
@@ -73,12 +93,20 @@ let run_install root json harness target force =
 let install_cmd =
   let harness = Arg.(value & opt string "pi" & info [ "harness" ] ~docv:"ID" ~doc:"Harness id. Defaults to pi.") in
   let target =
-    Arg.(required & opt (some string) None & info [ "target" ] ~docv:"DIR" ~doc:"Project directory to install into.")
+    Arg.(
+      value
+      & opt (some string) None
+      & info [ "target" ] ~docv:"DIR"
+          ~doc:
+            "With -p: the project directory. With -g: the harness global base (defaults: pi ~/.pi/agent, \
+             claude              ~/.claude, codex/muse ~/.agents).")
   in
+  let project = Arg.(value & flag & info [ "p"; "project" ] ~doc:"Install per project (explicit project scope).") in
+  let global = Arg.(value & flag & info [ "g"; "global" ] ~doc:"Install globally for this harness and user.") in
   let force = Arg.(value & flag & info [ "force" ] ~doc:"Replace hand-edited installed files.") in
   Cmd.v
-    (Cmd.info "install" ~doc:"Install rendered skills into a project.")
-    (capture Term.(const run_install $ root_term $ json_term $ harness $ target $ force))
+    (Cmd.info "install" ~doc:"Install rendered .md skills. Choose exactly one scope: -p/--project or -g/--global.")
+    (capture Term.(const run_install $ root_term $ json_term $ harness $ target $ project $ global $ force))
 
 let run_new root skill_id description =
   try

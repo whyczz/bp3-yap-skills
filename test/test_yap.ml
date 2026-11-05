@@ -13,7 +13,8 @@ let contains needle haystack =
 
 let rec find_root dir depth =
   if
-    Sys.file_exists (Filename.concat dir "harnesses.json")
+    Sys.file_exists (Filename.concat dir "dune-project")
+    && Sys.file_exists (Filename.concat (Filename.concat (Filename.concat dir "templates") "skill") "SKILL.md.j2")
     && Sys.file_exists (Filename.concat (Filename.concat (Filename.concat dir "skills") "iiuc") "SKILL.md.j2")
   then dir
   else if depth = 0 then fail "could not locate repository root"
@@ -27,6 +28,10 @@ let test_matrix_and_render root =
   let harnesses = Harness.load root in
   let pi = match Harness.find harnesses "pi" with Some harness -> harness | None -> fail "missing pi" in
   assert_true pi.tested "pi must be tested";
+  assert_true
+    (List.for_all (fun id -> (Harness.find harnesses id |> Option.get).tested) [ "codex"; "muse" ])
+    "codex and muse are load-tested";
+  assert_true (not (Harness.find harnesses "claude" |> Option.get).tested) "claude stays render-only until load-tested";
   assert_equal_string "/skill:iiuc" (Harness.invocation pi "iiuc") "pi invocation";
   let rendered = Core.render_all root [] in
   let get harness_id =
@@ -73,26 +78,38 @@ let test_scaffold () =
 
 let test_install root =
   let target = Filename.temp_dir "yap-target-" "" in
-  let written = Core.install root target "pi" false in
+  let written = Core.install root target "pi" Core.Project false in
   let dest =
     Filename.concat (Filename.concat (Filename.concat (Filename.concat target ".pi") "skills") "iiuc") "SKILL.md"
   in
-  assert_true (written = [ dest ]) "pi install writes iiuc";
+  let prompt = Filename.concat (Filename.concat (Filename.concat target ".pi") "prompts") "iiuc.md" in
+  assert_true (written = [ dest; prompt ]) "pi install writes skill and prompt template";
+  assert_true (contains "/iiuc" (Fs_util.read_file prompt)) "prompt template names /iiuc";
+  assert_true (contains "${ARGUMENTS:-}" (Fs_util.read_file prompt)) "prompt template forwards arguments";
   assert_true (Sys.file_exists dest) "installed file exists";
   assert_true
     (Sys.file_exists (Filename.concat (Filename.concat (Filename.concat target ".pi") "skills") "yap-skills.lock.json"))
     "lock file exists";
-  ignore (Core.install root target "pi" false);
+  ignore (Core.install root target "pi" Core.Project false);
   Fs_util.write_file dest (Fs_util.read_file dest ^ "\nhand edit\n");
   let refused =
     try
-      ignore (Core.install root target "pi" false);
+      ignore (Core.install root target "pi" Core.Project false);
       false
     with Failure _ -> true
   in
   assert_true refused "hand edit must be refused";
-  ignore (Core.install root target "pi" true);
+  ignore (Core.install root target "pi" Core.Project true);
   assert_true (not (contains "hand edit" (Fs_util.read_file dest))) "force replaces hand edit"
+
+let test_install_global root =
+  let base = Filename.temp_dir "yap-global-" "" in
+  let written = Core.install root base "pi" Core.Global false in
+  let dest = Filename.concat (Filename.concat (Filename.concat base "skills") "iiuc") "SKILL.md" in
+  let prompt = Filename.concat (Filename.concat base "prompts") "iiuc.md" in
+  assert_true (written = [ dest; prompt ]) "global pi install writes skills/ and prompts/";
+  let lock = Fs_util.read_file (Filename.concat (Filename.concat base "skills") "yap-skills.lock.json") in
+  assert_true (contains "\"scope\": \"global\"" lock) "global lock records scope"
 
 let () =
   let root = find_root (Sys.getcwd ()) 10 in
@@ -100,4 +117,5 @@ let () =
   test_lint root;
   test_scaffold ();
   test_install root;
+  test_install_global root;
   print_endline "test_yap: ok"

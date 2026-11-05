@@ -7,7 +7,9 @@ implementation approach before the toolchain hardens.
 
 Author each yap skill once as a templated source, render harness-compatible
 Markdown for pi, Claude, Codex, and Muse, and ship a scaffolder plus a linter
-around the sources. pi is the first tested harness.
+around the sources. pi is the first tested harness; Codex and Muse joined
+it in the 2026-11-05 battle test, Claude remains render-only
+(docs/harness-tests.md).
 
 ## Attacks and verdicts
 
@@ -92,6 +94,13 @@ of the same name is also refused.
   rendered by the in-repo mini engine, not Jinja or Jingoo.
 - `harnesses.json` is the only harness knowledge; pi tested first.
 - One OCaml CLI, `yap`: `check`, `render`, `install`, `new`, `list`.
+- `dune build @render` is the canonical check: it lints and renders every
+  harness into `_build/default/rendered/<harness>/`, and the pre-commit
+  hook runs it. Rendered pi output includes a prompt-template `.md` per
+  skill, which is how pi gets exact `/<skill>` commands while the skill
+  itself stays a portable `SKILL.md`.
+- Install scope is explicit: `install -p/--project` or
+  `install -g/--global`, never both, never implicit.
 - `dune test` covers rendering, lint, scaffold, and install against
   temporary directories. Tests are committed with the toolchain.
 - Only `iiuc` is implemented in v0.1.0. The designed roster stays designed

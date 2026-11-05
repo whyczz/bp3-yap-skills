@@ -15,8 +15,8 @@ dune build @fmt || {
   exit 1
 }
 
-echo "pre-commit: yap check"
-dune exec yap -- check --root .
+echo "pre-commit: dune render (check + render all harnesses)"
+dune build @render
 
 echo "pre-commit: dune test"
 dune test

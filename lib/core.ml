@@ -1,5 +1,7 @@
 type diagnostic = { level : string; message : string }
+type scope = Project | Global
 
+let scope_name = function Project -> "project" | Global -> "global"
 let max_skill_lines = 500
 let conditional_warn = 4
 
@@ -47,18 +49,24 @@ let skill_sources root =
 
 let skill_id_of_source source = Filename.dirname source |> Filename.basename
 
-let context root harness skill_id =
+let context_with_invocation root harness skill_id invocation =
   [
     ("skill_id", skill_id);
     ("version", version root);
-    ("invocation", Harness.invocation harness skill_id);
+    ("invocation", invocation);
     ("harness.id", harness.Harness.id);
     ("harness.display", harness.Harness.display);
   ]
 
+let context root harness skill_id = context_with_invocation root harness skill_id (Harness.invocation harness skill_id)
+
 let render_source root harness source =
   let input = Fs_util.read_file source in
   Template.render ~context:(context root harness (skill_id_of_source source)) input
+
+let render_source_with_invocation root harness source invocation =
+  let input = Fs_util.read_file source in
+  Template.render ~context:(context_with_invocation root harness (skill_id_of_source source) invocation) input
 
 let render_all root harness_ids =
   let harnesses = Harness.load root in
@@ -81,17 +89,82 @@ let render_all root harness_ids =
       in
       (harness, rendered))
 
+let split_frontmatter body =
+  let lines = String.split_on_char '\n' body in
+  match lines with
+  | "---" :: rest ->
+      let rec take acc = function
+        | [] -> None
+        | "---" :: tail -> Some (List.rev acc, tail)
+        | line :: tail -> take (line :: acc) tail
+      in
+      take [] rest
+      |> Option.map (fun (field_lines, body_lines) ->
+          let fields =
+            field_lines
+            |> List.filter_map (fun line ->
+                match String.index_opt line ':' with
+                | Some index ->
+                    Some
+                      ( String.trim (String.sub line 0 index),
+                        String.trim (String.sub line (index + 1) (String.length line - index - 1)) )
+                | None -> None)
+          in
+          (fields, String.concat "\n" body_lines))
+  | _ -> None
+
+let render_prompt_source root harness source =
+  match Harness.command_invocation harness (skill_id_of_source source) with
+  | None -> None
+  | Some invocation -> (
+      match render_source_with_invocation root harness source invocation with
+      | Error _ -> None
+      | Ok body -> (
+          match split_frontmatter body with
+          | None -> None
+          | Some (fields, rest) ->
+              let description = Option.value (List.assoc_opt "description" fields) ~default:"" in
+              Some
+                (Printf.sprintf
+                   "---\ndescription: %s\nargument-hint: \"[request]\"\n---\n%s\n\nUser request: ${ARGUMENTS:-}\n"
+                   description (String.trim rest))))
+
 let write_rendered root out_dir harness_ids =
   render_all root harness_ids
   |> List.concat_map (fun (harness, rendered) ->
-      rendered
-      |> List.map (fun (skill_id, body) ->
-          let dest =
-            Fs_util.join (Fs_util.join (Fs_util.join out_dir harness.Harness.skills_dir) skill_id) "SKILL.md"
-          in
-          Fs_util.mkdir_p (Filename.dirname dest);
-          Fs_util.write_file dest body;
-          dest))
+      let skill_files =
+        rendered
+        |> List.map (fun (skill_id, body) ->
+            let dest =
+              Fs_util.join
+                (Fs_util.join
+                   (Fs_util.join (Fs_util.join out_dir harness.Harness.id) harness.Harness.skills_dir)
+                   skill_id)
+                "SKILL.md"
+            in
+            Fs_util.mkdir_p (Filename.dirname dest);
+            Fs_util.write_file dest body;
+            dest)
+      in
+      let prompt_files =
+        match harness.Harness.prompts_dir with
+        | None -> []
+        | Some prompts_dir ->
+            skill_sources root
+            |> List.filter_map (fun source ->
+                match render_prompt_source root harness source with
+                | Some body ->
+                    let dest =
+                      Fs_util.join
+                        (Fs_util.join (Fs_util.join out_dir harness.Harness.id) prompts_dir)
+                        (skill_id_of_source source ^ ".md")
+                    in
+                    Fs_util.mkdir_p (Filename.dirname dest);
+                    Fs_util.write_file dest body;
+                    Some dest
+                | None -> None)
+      in
+      skill_files @ prompt_files)
 
 let parse_frontmatter body =
   let lines = String.split_on_char '\n' body in
@@ -190,7 +263,7 @@ let scaffold root skill_id description =
   Fs_util.write_file dest body;
   dest
 
-let install root target harness_id force =
+let install root target harness_id scope force =
   let harnesses = Harness.load root in
   let harness =
     match Harness.find harnesses harness_id with
@@ -198,34 +271,82 @@ let install root target harness_id force =
     | None -> failwith ("unknown harness: " ^ harness_id)
   in
   let rendered = match render_all root [ harness_id ] with [ (_, rows) ] -> rows | _ -> [] in
-  let skills_root = Fs_util.join target harness.Harness.skills_dir in
+  let skills_root, prompts_root =
+    match scope with
+    | Project ->
+        (Fs_util.join target harness.Harness.skills_dir, Option.map (Fs_util.join target) harness.Harness.prompts_dir)
+    | Global ->
+        ( Fs_util.join target harness.Harness.global_skills_dir,
+          Option.map (Fs_util.join target) harness.Harness.global_prompts_dir )
+  in
   let lock_path = Fs_util.join skills_root "yap-skills.lock.json" in
   let recorded = ref [] in
+  let lock_harness = ref None in
+  let lock_scope = ref None in
   (if Sys.file_exists lock_path then
      try
        let json = Yojson.Safe.from_file lock_path in
+       lock_harness := json |> Yojson.Safe.Util.member "harness" |> Yojson.Safe.Util.to_string_option;
+       lock_scope := json |> Yojson.Safe.Util.member "scope" |> Yojson.Safe.Util.to_string_option;
        recorded :=
          json |> Yojson.Safe.Util.member "files" |> Yojson.Safe.Util.to_assoc
          |> List.map (fun (key, value) -> (key, Yojson.Safe.Util.to_string value))
      with _ -> ());
-  let written =
+  (match !lock_harness with
+  | Some other when other <> harness_id && not force ->
+      failwith
+        (Printf.sprintf
+           "skills root %s is already managed for harness %s; refusing to install %s variant (pass --force to replace \
+            it)"
+           skills_root other harness_id)
+  | _ -> ());
+  (match !lock_scope with
+  | Some other when other <> scope_name scope && not force ->
+      failwith
+        (Printf.sprintf "skills root %s is already managed for scope %s; refusing scope %s (pass --force to replace it)"
+           skills_root other (scope_name scope))
+  | _ -> ());
+  let write_one key dest body =
+    (if Sys.file_exists dest && not force then
+       let current = Fs_util.digest_hex (Fs_util.read_file dest) in
+       if List.assoc_opt key !recorded <> Some current then
+         failwith
+           (Printf.sprintf "refusing to overwrite hand-edited or foreign file: %s (pass --force to replace it)" dest));
+    Fs_util.mkdir_p (Filename.dirname dest);
+    Fs_util.write_file dest body;
+    recorded := (key, Fs_util.digest_hex body) :: List.remove_assoc key !recorded;
+    dest
+  in
+  let written_skills =
     rendered
     |> List.map (fun (skill_id, body) ->
-        let dest = Fs_util.join (Fs_util.join skills_root skill_id) "SKILL.md" in
-        (if Sys.file_exists dest && not force then
-           let current = Fs_util.digest_hex (Fs_util.read_file dest) in
-           if List.assoc_opt skill_id !recorded <> Some current then
-             failwith
-               (Printf.sprintf "refusing to overwrite hand-edited or foreign file: %s (pass --force to replace it)" dest));
-        Fs_util.mkdir_p (Filename.dirname dest);
-        Fs_util.write_file dest body;
-        recorded := (skill_id, Fs_util.digest_hex body) :: List.remove_assoc skill_id !recorded;
-        dest)
+        write_one skill_id (Fs_util.join (Fs_util.join skills_root skill_id) "SKILL.md") body)
   in
+  let written_prompts =
+    match prompts_root with
+    | None -> []
+    | Some prompt_root ->
+        skill_sources root
+        |> List.filter_map (fun source ->
+            match render_prompt_source root harness source with
+            | None -> None
+            | Some body ->
+                let skill_id = skill_id_of_source source in
+                Some (write_one ("prompt:" ^ skill_id) (Fs_util.join prompt_root (skill_id ^ ".md")) body))
+  in
+  let written = written_skills @ written_prompts in
   let files_json =
     `Assoc (!recorded |> List.sort (fun (a, _) (b, _) -> String.compare a b) |> List.map (fun (k, v) -> (k, `String v)))
   in
-  let lock = `Assoc [ ("version", `String (version root)); ("harness", `String harness_id); ("files", files_json) ] in
+  let lock =
+    `Assoc
+      [
+        ("version", `String (version root));
+        ("harness", `String harness_id);
+        ("scope", `String (scope_name scope));
+        ("files", files_json);
+      ]
+  in
   Fs_util.mkdir_p skills_root;
   Fs_util.write_file lock_path (Yojson.Safe.pretty_to_string lock ^ "\n");
   written
