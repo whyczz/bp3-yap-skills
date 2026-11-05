@@ -1,0 +1,24 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "bp3-yap-skills"
+version = "0.1.0"
+description = "Authoring toolchain for portable, human-invoked bp3 yap skills."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["Jinja2>=3.1,<4"]
+
+[project.scripts]
+yap = "yap.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8,<9"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/yap"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

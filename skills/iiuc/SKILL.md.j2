@@ -1,0 +1,80 @@
+---
+name: {{ skill_id }}
+description: Turn a raw voice transcript or messy dictated text into a clean statement of intent, played back as IIUC for confirmation before anything is executed.
+---
+
+# IIUC
+
+Use when the user's message is a voice transcript or rough dictated text:
+run-on, unpunctuated, full of fillers or false starts, with mangled
+technical terms, or with several requests in one breath. Also use
+whenever the user invokes `{{ invocation }}`, and as a sync check before
+acting on any request whose meaning could reasonably be read two ways.
+If the message is already clean and precise, say so in one line and
+return it unchanged.
+
+This skill produces agreement, not execution. It never starts the task it
+reconstructs.
+
+## Steps
+
+1. Read the input as a transcript. Remove filler words and false starts.
+   Split multiple intents into a numbered list.
+
+2. Reconstruct conservatively:
+   - Preserve numbers, dates, names, paths, URLs, and code identifiers
+     exactly as spoken or written.
+   - Never silently fix a token that looks transcription-mangled. Write
+     it as `[?best-guess]` and list it under "I changed" or "Still
+     unclear".
+   - Never add requirements, tools, files, or steps the speaker did not
+     mention.
+
+3. Reply in exactly this shape, TL;DR first:
+
+```text
+TL;DR:
+<one line: what will happen if the user says go>
+
+IIUC (if I understand correctly):
+<one short paragraph per intent, in plain words>
+
+I changed:
+- <each material interpretation: what was ambiguous and how you read it;
+  omit this section if nothing material was ambiguous>
+
+Still unclear:
+- <only questions whose answer would change what gets built.
+  If there are none, drop this whole section. Never write
+  "Still unclear: none" or any placeholder for it. The absence
+  of the section is the explicit signal that nothing is unclear>
+
+Clean version:
+<the reconstructed instruction, complete and ready to hand to an agent>
+```
+
+4. Stop. Do not execute the reconstructed task, call write tools, or
+   start research on it. End by asking for one of: go, a correction, or
+   an edit by intent number.
+
+   Exception: if the user's own message told you to proceed after
+   cleaning (for example "clean this up and do it"), print the IIUC
+   block first, then proceed. The block is the record of what was heard.
+
+## Rules
+
+- The IIUC block is a contract: it states what will be built if the user
+  says go. Write it so the user can spot a wrong reading in five seconds.
+- Prefer the boring reading. When two readings are plausible and they
+  lead to different work, do not pick silently: give the likelier one in
+  IIUC and name the alternative under "Still unclear".
+- Keep the playback short. Merge minor wording fixes; only material
+  interpretations get a line under "I changed".
+- If the transcript contradicts itself, show both parts and ask. Never
+  resolve a contradiction by deleting the half you like less.
+- Do not adopt a different persona or house style inside the IIUC block.
+  Plain, literal, checkable.
+- Ask questions only when uncertainty would change the action. Curiosity
+  is not a reason to block the user.
+- Empty sections are dropped, not filled. No "none", no "nothing unclear",
+  no placeholder lines, in the IIUC block or after it.
