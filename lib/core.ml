@@ -326,6 +326,8 @@ let lint root =
   let diagnostics = ref [] in
   let add level message = diagnostics := { level; message } :: !diagnostics in
   let sources = skill_sources root in
+  (try ignore (Lifecycle.retired root ~valid_id:valid_skill_id ~active:(List.map skill_id_of_source sources))
+   with exn -> add "error" ("retirements: " ^ Printexc.to_string exn));
   if sources = [] then add "error" "no skills found under skills/";
   let readme = try Fs_util.read_file (Fs_util.join root "README.md") with _ -> "" in
   let harnesses = Harness.load root in
@@ -412,7 +414,7 @@ let install_roots target harness scope =
       ( Fs_util.join target harness.Harness.global_skills_dir,
         Option.map (Fs_util.join target) harness.Harness.global_prompts_dir )
 
-let install root target harness_id scope force =
+let install ?(dry_run = false) root target harness_id scope force =
   let harnesses = Harness.load root in
   let harness =
     match Harness.find harnesses harness_id with
@@ -423,17 +425,20 @@ let install root target harness_id scope force =
   let skills_root, prompts_root = install_roots target harness scope in
   let lock_path = Fs_util.join skills_root "yap-skills.lock.json" in
   let recorded = ref [] in
+  let removals = ref [] in
   let lock_harness = ref None in
   let lock_scope = ref None in
   (if Sys.file_exists lock_path then
      try
        let json = Yojson.Safe.from_file lock_path in
+       (removals :=
+          match Yojson.Safe.Util.member "removals" json with `Null -> [] | value -> Yojson.Safe.Util.to_list value);
        lock_harness := json |> Yojson.Safe.Util.member "harness" |> Yojson.Safe.Util.to_string_option;
        lock_scope := json |> Yojson.Safe.Util.member "scope" |> Yojson.Safe.Util.to_string_option;
        recorded :=
          json |> Yojson.Safe.Util.member "files" |> Yojson.Safe.Util.to_assoc
          |> List.map (fun (key, value) -> (key, Yojson.Safe.Util.to_string value))
-     with _ -> ());
+     with exn -> failwith ("invalid install lock " ^ lock_path ^ ": " ^ Printexc.to_string exn));
   (match !lock_harness with
   | Some other when other <> harness_id && not force ->
       failwith
@@ -448,14 +453,41 @@ let install root target harness_id scope force =
         (Printf.sprintf "skills root %s is already managed for scope %s; refusing scope %s (pass --force to replace it)"
            skills_root other (scope_name scope))
   | _ -> ());
+  let retired = Lifecycle.retired root ~valid_id:valid_skill_id ~active:(List.map fst rendered) in
+  let settings =
+    if harness_id = "pi" then
+      Some
+        (Lifecycle.pi_settings_plan
+           (match scope with Global -> target | Project -> Fs_util.join target ".pi")
+           (List.map fst rendered))
+    else None
+  in
+  let validate key dest =
+    if Sys.file_exists dest && not force then
+      let current = Fs_util.digest_hex (Fs_util.read_file dest) in
+      if List.assoc_opt key !recorded <> Some current then
+        failwith
+          (Printf.sprintf "refusing to overwrite hand-edited or foreign file: %s (pass --force to replace it)" dest)
+  in
+  (* Check all current destinations before deleting retired files. *)
+  rendered |> List.iter (fun (id, _) -> validate id (Fs_util.join (Fs_util.join skills_root id) "SKILL.md"));
+  Option.iter
+    (fun base ->
+      skill_sources root
+      |> List.iter (fun source ->
+          let id = skill_id_of_source source in
+          validate ("prompt:" ^ id) (Fs_util.join base (id ^ ".md"))))
+    prompts_root;
+  let owned = !lock_harness = Some harness_id && !lock_scope = Some (scope_name scope) in
+  let cleanup = Lifecycle.cleanup ~dry_run ~owned ~version:(version root) ~recorded ~removals in
+  retired
+  |> List.iter (fun id ->
+      cleanup ~root:skills_root id (Fs_util.join (Fs_util.join skills_root id) "SKILL.md");
+      Option.iter (fun base -> cleanup ~root:base ("prompt:" ^ id) (Fs_util.join base (id ^ ".md"))) prompts_root);
   let write_one key dest body =
-    (if Sys.file_exists dest && not force then
-       let current = Fs_util.digest_hex (Fs_util.read_file dest) in
-       if List.assoc_opt key !recorded <> Some current then
-         failwith
-           (Printf.sprintf "refusing to overwrite hand-edited or foreign file: %s (pass --force to replace it)" dest));
-    Fs_util.mkdir_p (Filename.dirname dest);
-    Fs_util.write_file dest body;
+    if not dry_run then (
+      Fs_util.mkdir_p (Filename.dirname dest);
+      Fs_util.write_file dest body);
     recorded := (key, Fs_util.digest_hex body) :: List.remove_assoc key !recorded;
     dest
   in
@@ -477,6 +509,15 @@ let install root target harness_id scope force =
                 Some (write_one ("prompt:" ^ skill_id) (Fs_util.join prompt_root (skill_id ^ ".md")) body))
   in
   let written = written_skills @ written_prompts in
+  let written =
+    match settings with
+    | None -> written
+    | Some (path, body) ->
+        if not dry_run then (
+          Fs_util.mkdir_p (Filename.dirname path);
+          Fs_util.write_file path body);
+        written @ [ path ]
+  in
   let files_json =
     `Assoc (!recorded |> List.sort (fun (a, _) (b, _) -> String.compare a b) |> List.map (fun (k, v) -> (k, `String v)))
   in
@@ -487,13 +528,15 @@ let install root target harness_id scope force =
         ("harness", `String harness_id);
         ("scope", `String (scope_name scope));
         ("files", files_json);
+        ("removals", `List !removals);
       ]
   in
-  Fs_util.mkdir_p skills_root;
-  Fs_util.write_file lock_path (Yojson.Safe.pretty_to_string lock ^ "\n");
+  if not dry_run then (
+    Fs_util.mkdir_p skills_root;
+    Fs_util.write_file lock_path (Yojson.Safe.pretty_to_string lock ^ "\n"));
   written
 
-let install_many root installs scope force =
+let install_many ?(dry_run = false) root installs scope force =
   let harnesses = Harness.load root in
   let resolved =
     installs
@@ -517,4 +560,4 @@ let install_many root installs scope force =
         check_seen rest
   in
   check_seen roots;
-  resolved |> List.concat_map (fun (harness, target) -> install root target harness.Harness.id scope force)
+  resolved |> List.concat_map (fun (harness, target) -> install ~dry_run root target harness.Harness.id scope force)

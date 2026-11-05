@@ -3,6 +3,7 @@
  (deps
   (source_tree skills)
   harnesses.json
+  retired-skills.json
   VERSION
   README.md)
  (action

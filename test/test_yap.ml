@@ -164,6 +164,149 @@ let test_install_many root =
     (not (Sys.file_exists (Filename.concat clash_target ".agents")))
     "collision refusal happens before any writes"
 
+let retirement_fixture harness scope =
+  let root = make_fixture () in
+  ignore (Core.scaffold root "demo-skill" "Current skill.");
+  let source = Core.scaffold root "commit-fmt" "Old skill." in
+  let target = Filename.temp_dir "yap-retire-" "" in
+  ignore (Core.install root target harness scope false);
+  Sys.remove source;
+  write (Filename.concat root "retired-skills.json") {|{"commit-fmt":{"replacement":"demo-skill","reason":"Renamed."}}|};
+  let config = Harness.load root |> fun hs -> Harness.find hs harness |> Option.get in
+  let skills, prompts = Core.install_roots target config scope in
+  ( root,
+    target,
+    Filename.concat skills "commit-fmt/SKILL.md",
+    Option.map (fun base -> Filename.concat base "commit-fmt.md") prompts,
+    Filename.concat skills "yap-skills.lock.json" )
+
+let test_retirements () =
+  List.iter
+    (fun (harness, scope) ->
+      let root, target, skill, prompt, lock = retirement_fixture harness scope in
+      let before = Fs_util.read_file lock in
+      ignore (Core.install ~dry_run:true root target harness scope false);
+      assert_true (Sys.file_exists skill) "dry run must not delete";
+      assert_equal_string before (Fs_util.read_file lock) "dry run must not update lock";
+      write (Filename.concat (Filename.dirname skill) "notes.txt") "keep me";
+      ignore (Core.install root target harness scope false);
+      assert_true (not (Sys.file_exists skill)) "retired owned file is removed";
+      assert_true (Sys.file_exists (Filename.concat (Filename.dirname skill) "notes.txt")) "unrelated assets survive";
+      Option.iter (fun p -> assert_true (not (Sys.file_exists p)) "retired prompt removed") prompt;
+      let json = Yojson.Safe.from_file lock in
+      let files = json |> Yojson.Safe.Util.member "files" |> Yojson.Safe.Util.to_assoc in
+      assert_true (not (List.mem_assoc "commit-fmt" files)) "retirement leaves active inventory";
+      let removals = json |> Yojson.Safe.Util.member "removals" |> Yojson.Safe.Util.to_list in
+      assert_true (List.length removals = if harness = "pi" then 2 else 1) "removals recorded";
+      ignore (Core.install root target harness scope false);
+      let again = Yojson.Safe.from_file lock |> Yojson.Safe.Util.member "removals" in
+      assert_true (again = `List removals) "removal history is stable on repeat installs")
+    [
+      ("pi", Core.Global); ("pi", Core.Project); ("codex", Core.Global); ("claude", Core.Project); ("muse", Core.Global);
+    ];
+  List.iter
+    (fun kind ->
+      let root, target, skill, _, lock = retirement_fixture "pi" Core.Global in
+      let original = Fs_util.read_file skill in
+      (match kind with
+      | "modified" -> write skill (original ^ "\nmy edit")
+      | "foreign" ->
+          let json = Yojson.Safe.from_file lock |> Yojson.Safe.Util.to_assoc in
+          let files = List.assoc "files" json |> Yojson.Safe.Util.to_assoc |> List.remove_assoc "commit-fmt" in
+          write lock (Yojson.Safe.to_string (`Assoc (("files", `Assoc files) :: List.remove_assoc "files" json)))
+      | "symlink" ->
+          let outside = Filename.temp_file "yap-outside-" "" in
+          write outside original;
+          Sys.remove skill;
+          Unix.symlink outside skill
+      | "parent-symlink" ->
+          let outside = Filename.temp_dir "yap-outside-" "" in
+          write (Filename.concat outside "SKILL.md") original;
+          Sys.remove skill;
+          Unix.rmdir (Filename.dirname skill);
+          Unix.symlink outside (Filename.dirname skill)
+      | _ -> fail "unknown fixture");
+      ignore (Core.install root target "pi" Core.Global true);
+      assert_true (Sys.file_exists skill) (kind ^ " retired file survives even --force"))
+    [ "modified"; "foreign"; "symlink"; "parent-symlink" ];
+  let root, target, skill, _, lock = retirement_fixture "pi" Core.Global in
+  write lock "{broken";
+  let refused =
+    try
+      ignore (Core.install root target "pi" Core.Global false);
+      false
+    with Failure _ -> true
+  in
+  assert_true refused "corrupt lock fails closed";
+  assert_true (Sys.file_exists skill) "corrupt lock cannot cause deletion"
+
+let test_retirement_guards () =
+  let root = make_fixture () in
+  ignore (Core.scaffold root "demo-skill" "Current skill.");
+  List.iter
+    (fun registry ->
+      write (Filename.concat root "retired-skills.json") registry;
+      assert_true
+        (Core.lint root |> List.exists (fun d -> d.Core.level = "error" && contains "retirements:" d.Core.message))
+        "invalid retirement must fail lint")
+    [
+      {|{"../escape":{"reason":"unsafe"}}|};
+      {|{"demo-skill":{"reason":"still active"}}|};
+      {|{"old":{"replacement":"missing","reason":"bad target"}}|};
+      {|{"old":{"replacement":null,"reason":""}}|};
+    ];
+  let root, target, old, _, lock = retirement_fixture "pi" Core.Global in
+  let current = Filename.concat target "skills/demo-skill/SKILL.md" in
+  write current "hand edited";
+  let before = Fs_util.read_file lock in
+  let refused =
+    try
+      ignore (Core.install root target "pi" Core.Global false);
+      false
+    with Failure _ -> true
+  in
+  assert_true refused "active-file conflict aborts install";
+  assert_true (Sys.file_exists old) "active conflict cannot delete retired files";
+  assert_equal_string before (Fs_util.read_file lock) "active conflict preserves lock";
+  let root, target, old, _, _ = retirement_fixture "pi" Core.Global in
+  Sys.remove old;
+  Unix.rmdir (Filename.dirname old);
+  ignore (Core.install root target "pi" Core.Global false);
+  assert_true (not (Sys.file_exists old)) "already missing retirement is harmless"
+
+let test_pi_discovery_settings () =
+  let root = make_fixture () in
+  ignore (Core.scaffold root "demo-skill" "Current skill.");
+  let target = Filename.temp_dir "yap-settings-" "" in
+  let path = Filename.concat target "settings.json" in
+  write path {|{"defaultModel":"keep-model","skills":["/extra/skills","!**/ignored/**"]}|};
+  let before = Fs_util.read_file path in
+  ignore (Core.install ~dry_run:true root target "pi" Core.Global false);
+  assert_equal_string before (Fs_util.read_file path) "dry run preserves settings";
+  ignore (Core.install root target "pi" Core.Global false);
+  let json = Yojson.Safe.from_file path in
+  assert_equal_string "keep-model"
+    (json |> Yojson.Safe.Util.member "defaultModel" |> Yojson.Safe.Util.to_string)
+    "settings merge preserves unrelated preferences";
+  let skills = json |> Yojson.Safe.Util.member "skills" |> Yojson.Safe.Util.to_list in
+  assert_true
+    (List.mem (`String "!**/.agents/skills/demo-skill/SKILL.md") skills)
+    "Pi excludes only managed ids from .agents";
+  assert_true (List.mem (`String "/extra/skills") skills) "existing skill paths survive";
+  ignore (Core.install root target "pi" Core.Global false);
+  assert_true (Yojson.Safe.from_file path = json) "settings merge is idempotent";
+  let fresh = Filename.temp_dir "yap-dry-" "" in
+  ignore (Core.install ~dry_run:true root fresh "pi" Core.Project false);
+  assert_true (Sys.readdir fresh = [||]) "fresh dry run creates no files";
+  write path "{broken";
+  let refused =
+    try
+      ignore (Core.install root target "pi" Core.Global false);
+      false
+    with Yojson.Json_error _ -> true
+  in
+  assert_true refused "invalid settings fail closed"
+
 let test_plugin root =
   let out = Filename.temp_dir "yap-plugin-" "" in
   let written = Core.write_plugin root out [] in
@@ -198,6 +341,9 @@ let () =
   test_install root;
   test_install_global root;
   test_install_many root;
+  test_retirements ();
+  test_retirement_guards ();
+  test_pi_discovery_settings ();
   test_plugin root;
   test_harness_selection_is_cli_only ();
   print_endline "test_yap: ok"

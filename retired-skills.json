@@ -1,0 +1,6 @@
+{
+  "commit-fmt": {
+    "replacement": "commit",
+    "reason": "Renamed to commit; the output format remains part of the skill."
+  }
+}

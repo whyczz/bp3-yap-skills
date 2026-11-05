@@ -107,7 +107,7 @@ let default_global_base harness_id =
       Filename.concat config_home "muse"
   | other -> failwith ("unknown harness: " ^ other)
 
-let run_install root json harness_flags target project global force =
+let run_install root json harness_flags target project global force dry_run =
   try
     let harness_ids = selected_harnesses harness_flags in
     let scope, installs =
@@ -124,7 +124,7 @@ let run_install root json harness_flags target project global force =
       | false, false, _ -> failwith "choose exactly one install scope: -p/--project or -g/--global"
       | true, true, _ -> failwith "install scopes are mutually exclusive: choose -p/--project or -g/--global"
     in
-    let written = Core.install_many root installs scope force in
+    let written = Core.install_many ~dry_run root installs scope force in
     if json then `List (written |> List.map (fun path -> `String path)) |> Yojson.Safe.to_string |> print_endline
     else written |> List.iter print_endline;
     0
@@ -132,6 +132,8 @@ let run_install root json harness_flags target project global force =
   | Failure message -> print_error message
   | Sys_error message -> print_error message
   | Invalid_argument message -> print_error message
+  | Yojson.Json_error message -> print_error ("invalid JSON: " ^ message)
+  | Yojson.Safe.Util.Type_error (message, _) -> print_error ("invalid configuration: " ^ message)
 
 let install_cmd =
   let harness = harness_arg in
@@ -146,10 +148,15 @@ let install_cmd =
   in
   let project = Arg.(value & flag & info [ "p"; "project" ] ~doc:"Install per project (explicit project scope).") in
   let global = Arg.(value & flag & info [ "g"; "global" ] ~doc:"Install globally for this harness and user.") in
-  let force = Arg.(value & flag & info [ "force" ] ~doc:"Replace hand-edited installed files.") in
+  let force =
+    Arg.(value & flag & info [ "force" ] ~doc:"Replace hand-edited active files; never force retirement deletion.")
+  in
+  let dry_run =
+    Arg.(value & flag & info [ "dry-run" ] ~doc:"Preview installs and retired-file removals without writing anything.")
+  in
   Cmd.v
     (Cmd.info "install" ~doc:"Install rendered .md skills. Choose exactly one scope: -p/--project or -g/--global.")
-    (capture Term.(const run_install $ root_term $ json_term $ harness $ target $ project $ global $ force))
+    (capture Term.(const run_install $ root_term $ json_term $ harness $ target $ project $ global $ force $ dry_run))
 
 let run_new root skill_id description =
   try

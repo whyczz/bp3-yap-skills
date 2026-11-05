@@ -38,6 +38,7 @@ design doc is not an implementation.
 skills/<skill-id>/SKILL.md.j2   authored source, one directory per skill
 templates/skill/SKILL.md.j2     scaffolder template
 harnesses.json                  harness paths and invocation spellings
+retired-skills.json             retired ids, replacement (or null), and reason
 lib/, bin/                      OCaml renderer, linter, scaffolder, installer
 tests/                          tooling tests
 generated/                      render output (not committed)
@@ -91,12 +92,82 @@ and `<project>/.pi/prompts/<id>.md`. Global pi writes
 `~/.pi/agent/skills/<id>/SKILL.md` and `~/.pi/agent/prompts/<id>.md`
 (or under `$PI_CODING_AGENT_DIR`). Other harnesses take their conventional
 global bases (`~/.claude`, `~/.agents`, `~/.config/muse`). Installs record scope, harness,
-and SHA-style content hashes in `yap-skills.lock.json` beside the skills,
+and content hashes in `yap-skills.lock.json` beside the skills,
 and refuse to overwrite a file they did not install unless `--force` is
 given. Global yap skills are the default way the CEO gets `/iiuc`
 everywhere; per-project installs pin or override a version for one repo,
 and the installer refuses to layer a second harness variant into a root
 already managed for another harness.
+
+## Duplicate discovery in Pi
+
+Pi discovers both its own skills and Agent Skills directories (`~/.agents/skills`
+and project `.agents/skills`). Installing Pi and Codex variants therefore used
+to produce duplicate-name warnings. Pi installs now merge one exclusion per
+active yap skill into the scope's `settings.json`, for example:
+
+```json
+{"skills": ["!**/.agents/skills/ask/SKILL.md"]}
+```
+
+This selects the Pi render without deleting Codex/Muse files or hiding unrelated
+skills. Existing preferences and resource entries are preserved; repeated installs
+do not duplicate the generated entries. Exclusions are additive, not automatically
+removed. Pi packages alone do not perform this installer configuration.
+
+Pi applies these exclusions **per scope**: user settings exclude user-discovered
+copies, and project settings exclude project-discovered copies. A global install
+does not change arbitrary projects. If an old project `.agents/skills/iiuc` shadows
+your global Pi skill, add `!**/.agents/skills/iiuc/SKILL.md` to that project's
+`.pi/settings.json` `skills` list. This preserves the old file while preferring the
+Pi variant. Explicit `+path` entries can override glob exclusions. Intentional
+project/global Pi overrides may still generate collision warnings.
+
+## Retiring or renaming a skill
+
+Deleting a source alone does **not** authorize deletion of installed files.
+Record the retirement in `retired-skills.json`; keep the entry permanently so
+users upgrading from older versions get cleanup too:
+
+```json
+{
+  "commit-fmt": {
+    "replacement": "commit",
+    "reason": "Renamed to commit."
+  }
+}
+```
+
+Use `null` for `replacement` when there is no successor. Retired ids cannot
+remain active, replacements must be active, and every retirement needs a reason.
+`yap check` validates this registry.
+
+On the next install for each harness/scope, the installer removes the retired
+`SKILL.md` and corresponding Pi prompt only if the existing lock records ownership
+for that harness and scope **and** the current content hash matches. Modified,
+untracked, or symlinked files are preserved and reported, even with `--force`.
+Only empty skill directories are removed; unrelated files survive. Successful
+removals move out of the lock's `files` inventory into its append-only `removals`
+history (key, path, content hash, toolchain version, and removal time). Missing
+files simply leave the inventory. Corrupt locks fail closed.
+
+Preview before applying:
+
+```sh
+dune exec yap -- install --root . --harness pi -g --dry-run
+dune exec yap -- install --root . --harness pi -g
+```
+
+`--dry-run` previews writes on stdout and retirement decisions on stderr; it
+changes neither installed files nor settings/locks. Install each harness to clean
+its own files. There is no recursive deletion or general untracked-file pruning.
+
+The regular gate is `make check`. To also exercise the installed Pi discovery
+implementation with temporary user/project directories:
+
+```sh
+PI_PACKAGE_ROOT=/path/to/@earendil-works/pi-coding-agent node test/pi-discovery.mjs
+```
 
 ## Authoring rules
 
