@@ -1,0 +1,46 @@
+---
+name: {{ skill_id }}
+description: Produce a read-only primer over a diff or change: shape, features, dogfood cases, and where a reviewer should look hardest.
+---
+
+# TLDR
+
+Use when the user invokes `{{ invocation }}`, asks for a TL;DR of a
+change, or is about to review work they did not write. Read-only: this
+skill orients a human reviewer; it does not approve, land, or fix.
+
+## Procedure
+
+1. Read the whole diff, plus the tests it touches and the callers of
+   anything it changes. Note the commit or branch and say what you read.
+2. Reconstruct intent from the diff itself, not the commit message.
+   Where intent and diff disagree, that gap is a finding.
+3. Identify the shape: new or changed data structures, public functions,
+   control flow, and anything stateful. One small ASCII flow only when
+   the change is a pipeline or state machine.
+4. Write dogfood cases: three to five concrete inputs or steps a human
+   can run in minutes to see the change work, including one edge case.
+5. Mark review focus: the files or hunks where a defect would hide, and
+   why. Rank them; a reviewer reads the first one carefully.
+
+## Output
+
+```text
+TL;DR: <what changed and why, two lines max>
+
+Features: <user-visible behavior, bullets>
+Design: <shape of the solution, identifiers named>
+Flow: <ASCII, only if it earns it>
+Dogfood: <numbered cases a human can run>
+Review focus: <ranked files/hunks and the risk in each>
+Review commands: <the exact commands to run the checks>
+```
+
+## Rules
+
+- No verdict on quality beyond naming risks. Approval belongs to the
+  human or to control's review gate.
+- Never summarize a diff you did not fully read. Say which files you
+  skimmed and why.
+- If the diff is too large to prime honestly, say so and propose the
+  split you would review in, instead of a confident fog.

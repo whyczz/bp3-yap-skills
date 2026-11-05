@@ -12,13 +12,7 @@ let split_harness_list values =
 
 let selected_harnesses flags =
   let from_flags = split_harness_list flags in
-  if from_flags <> [] then from_flags
-  else
-    match Sys.getenv_opt "HARNESS" with
-    | Some value ->
-        let from_env = split_harness_list [ value ] in
-        if from_env = [] then [ "pi" ] else from_env
-    | None -> [ "pi" ]
+  if from_flags <> [] then from_flags else [ "pi" ]
 
 let harness_arg =
   Arg.(
@@ -68,7 +62,7 @@ let run_render root json harness_flags all out =
 
 let render_cmd =
   let harness = harness_arg in
-  let all = Arg.(value & flag & info [ "all" ] ~doc:"Render every harness, ignoring --harness and $HARNESS.") in
+  let all = Arg.(value & flag & info [ "all" ] ~doc:"Render every harness, ignoring --harness.") in
   let out =
     Arg.(value & opt (some string) None & info [ "out" ] ~docv:"DIR" ~doc:"Output root. Defaults to generated/.")
   in

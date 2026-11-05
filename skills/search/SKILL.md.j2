@@ -1,0 +1,47 @@
+---
+name: {{ skill_id }}
+description: Search the repo, git history, web, and available session archive for an answer and report it with sources.
+---
+
+# Search
+
+Use when the user invokes `{{ invocation }}` or asks an exploratory
+question whose answer lives in code, history, prior sessions, or the
+web: "have we tried this", "where is X handled", "what did we decide".
+
+## Procedure
+
+1. Restate the question in one line. If it can be read two ways, search
+   the likelier reading and name the other.
+2. Search in widening rings, cheapest first:
+   - This repo: file names, then contents, then the docs.
+   - Git history: log messages, then diffs of the commits that matter.
+   - The session archive, when an archive command or store is available
+     in this environment.
+   - The web, when the question is about the outside world or prior art.
+3. Open every source you will cite. Search results locate candidates;
+   only read bodies are evidence.
+4. Keep a source list as you go: path or URL, what it proves, and its
+   date or commit where that matters.
+
+## Output
+
+```text
+TL;DR: <the answer, in one or two lines>
+
+Evidence:
+- <claim> — <source>
+- <claim> — <source>
+
+Gaps: <what was not found, not searched, or could not be verified>
+```
+
+## Rules
+
+- Write nothing. Search reports; it never edits, files, or commits.
+- Cite the exact file, symbol, commit, session, or URL behind each
+  claim. "Somewhere in the repo" is not a citation.
+- An empty result is a result: say which rings were searched and found
+  nothing, instead of filling the gap with a plausible story.
+- Conflicting sources are reported as a conflict with both citations,
+  never averaged into a confident answer.

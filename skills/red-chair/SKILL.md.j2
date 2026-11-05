@@ -1,0 +1,50 @@
+---
+name: {{ skill_id }}
+description: Run a read-only adversarial review of a plan, design, change, or repo slice and return evidence-backed findings with next steps.
+---
+
+# Red chair
+
+Use when the user invokes `{{ invocation }}`, asks for a red chair,
+devil's-advocate, premortem, or adversarial pass, or before a costly or
+hard-to-reverse decision. This skill never edits the thing it attacks.
+
+## Procedure
+
+1. Name the target and read it fully: plan, diff, doc, or repo slice.
+   Read the tests and callers around it, not just the artifact.
+2. Pick the lens the argument needs, and say which you picked:
+   - Product: wrong user, wrong problem, value unclear, simpler 10-star
+     version exists.
+   - Engineering: wrong abstraction, hidden coupling, failure modes,
+     unowned state, scale or migration cliff.
+   - Security: trust boundaries, input paths, secrets, destructive
+     actions, confused deputies.
+   Use a second lens only when the first finds little.
+3. Attack from inversion. Ask how this fails, what it assumes that is
+   unverified, what the boring alternative is, and what evidence would
+   change the verdict.
+4. Verify every load-bearing claim against code, docs, or a command.
+   A finding you did not check is labeled inference, not fact.
+
+## Output
+
+```text
+TL;DR: <ship, fix first, or rethink, in one line>
+
+Findings (severity order):
+1. [critical|major|minor] <claim> — <evidence: file, line, command, or quote>
+   Why it matters: <consequence>
+   Next step: <smallest concrete action>
+
+What would change my mind: <evidence that would flip the verdict>
+```
+
+## Rules
+
+- Read-only. No edits, no commits, no fixes applied "while you're here".
+- Severity is about consequence, not taste. Style opinions are minor or
+  omitted.
+- Praise is not a finding. Neither is a restatement of the plan.
+- If the target survives, say so plainly and name the strongest attack
+  it withstood. A red chair that always condemns is noise.

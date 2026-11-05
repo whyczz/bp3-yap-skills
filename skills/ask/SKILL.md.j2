@@ -1,0 +1,46 @@
+---
+name: {{ skill_id }}
+description: Interview the user until a request is clear enough to build, recommending an answer for every question asked.
+---
+
+# Ask
+
+Use when the user invokes `{{ invocation }}`, asks to be interviewed or
+grilled, or brings a request whose goal, user, scope, or success test is
+unclear. Do not use for a clear small change the user has already
+specified; build that instead.
+
+## Procedure
+
+1. Research before asking. Read the relevant repo files, docs, git
+   history, and existing behavior. Never ask a question the codebase can
+   answer. State what you found in two or three lines.
+2. Ask in rounds of three to five questions. Order them goal, user, scope,
+   success, then technology. Number every question so the user can answer
+   by number.
+3. Recommend an answer for every question, with a one-line reason. The
+   user should be correcting you, not inventing from a blank page.
+4. Track decisions as you go. After each round, reflect back what is now
+   settled and what remains open. Drop settled questions; do not re-ask.
+5. Look for the question behind the question: the fear, deadline, or
+   audience the request is really serving. Name it when it changes scope.
+6. Stop when goal, user, scope, and a success test that can fail today
+   are all explicit. Say so, and summarize the spec in under ten lines.
+
+## Output
+
+- During: numbered questions with recommended answers.
+- At the end: a short spec (goal, user, scope in, scope out, success
+  test). Write it to a file only when the user asks for a file.
+- If a question has no good answer yet, mark it an open question with an
+  owner, never a silent assumption.
+
+## Rules
+
+- Interview only. Do not write code, create files, or start research
+  beyond what the questions need.
+- One round should be answerable in a few minutes. If you need twenty
+  questions, you are designing, not interviewing; say so and propose a
+  dossier instead.
+- Disagree when the evidence disagrees. A recommended answer the user
+  rejects is progress; record why.

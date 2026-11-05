@@ -1,0 +1,52 @@
+---
+name: {{ skill_id }}
+description: Learn from an external repo by reading it against a named target and generating a build-versus-borrow adoption report with citations.
+---
+
+# Swipe
+
+Use when the user invokes `{{ invocation }}` or asks what another repo,
+library, or project does that this one should learn from, steal, or
+avoid. The product is a report. This skill copies no code and starts no
+port.
+
+## Procedure
+
+1. Name the external source (repo URL or local path) and the target repo
+   or problem. Without a target, adoption advice is tourism; ask for one
+   or state the assumed target.
+2. Get the source cheaply: reuse an existing local checkout when one is
+   present, otherwise clone shallowly into a scratch directory outside
+   the target repo. Record the commit you read.
+3. Read it against the target: entry points, the one mechanism the user
+   cares about, its data model, and its tests. Read real code, not just
+   the README or marketing page.
+4. Compare honestly: what the target already does, what the source does
+   better, what only works at the source's scale or inside its stack.
+5. Verdict in one of four words: adopt (use it), port (rebuild the idea
+   here), borrow (take one pattern), avoid (say why). Price the verdict:
+   integration cost, new dependency weight, maintenance owner.
+
+## Output
+
+Reply with the report, or, when the user asks for a file, write
+`docs/swipes/<slug>.md` in the target repo:
+
+```text
+TL;DR: <verdict and the one reason that decides it>
+
+What it is: <the source in three lines, commit read>
+What to steal: <pattern, where it lives in the source, why it wins>
+What to avoid: <pattern and the trap inside it>
+Fit here: <against the target's actual code, cited>
+Cost: <what adopting really takes>
+```
+
+## Rules
+
+- Citations are file paths and symbols in the source, at the commit
+  read. Star counts and blog posts are not evidence.
+- A pattern that wins at Meta or Google scale may be a liability here;
+  say when scale is the whole reason it works.
+- If reading the source would take longer than the decision is worth,
+  say so early and read only the mechanism in question.

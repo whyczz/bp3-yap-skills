@@ -1,0 +1,53 @@
+---
+name: {{ skill_id }}
+description: Build a deep-dive dossier on a problem space: map, forces, options, diagrams, and ranked open questions, without deciding.
+---
+
+# Dossier
+
+Use when the user invokes `{{ invocation }}` or wants to understand a
+problem space before committing: how something works, what the options
+are, what a migration would touch. A dossier explores. It never decides,
+requests sign-off, or lands anything; its output feeds `ask`, a Quest,
+or a sign-off packet.
+
+## Procedure
+
+1. Name the question the dossier serves and who will use it. A dossier
+   without a reader becomes a wiki page.
+2. Map the territory from evidence: the real files, data structures,
+   call paths, sessions, and prior art. Cite as you go.
+3. Name the forces: constraints, costs, failure modes, deadlines, and
+   the incentives of the people or systems involved.
+4. Lay out the options, including doing nothing. For each: what it
+   takes, what it breaks, and what would have to be true for it to win.
+5. Rank the open questions by what their answers would change. A
+   question whose answer changes nothing is trivia; cut it.
+6. Draw only where a picture beats a paragraph: current shape, option
+   shapes, or a sequence. Mermaid in the Markdown source; an Excalidraw
+   export beside the doc only when a diagram needs hand-shaping.
+
+## Output
+
+Reply with the dossier, or, when the user asks for a file, write
+`docs/dossiers/<slug>.md` in the repo it studies:
+
+```text
+# <problem space>
+Question this serves: <one line>
+
+## Map
+## Forces
+## Options
+## Open questions (ranked by what they change)
+## What I did not verify
+```
+
+## Rules
+
+- No verdict disguised as a summary. If you lean, label it a lean and
+  show the strongest counter-case next to it.
+- Every load-bearing claim cites a file, session, commit, or source.
+- Unknowns are first-class content, not gaps to smooth over.
+- If the work uncovers an urgent defect or a decision that cannot wait,
+  stop and say so instead of finishing the tour.

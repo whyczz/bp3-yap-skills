@@ -151,6 +151,12 @@ let test_plugin root =
   let muse_manifest = Fs_util.read_file (Filename.concat out "muse/bp3/.muse-plugin/plugin.json") in
   assert_true (contains "\"schemaVersion\": 1" muse_manifest) "muse manifest declares schemaVersion 1"
 
+let test_harness_selection_is_cli_only () =
+  Unix.putenv "HARNESS" "claude";
+  assert_true (Cli.selected_harnesses [] = [ "pi" ]) "HARNESS env must not select harnesses";
+  assert_true (Cli.selected_harnesses [ "pi,codex" ] = [ "pi"; "codex" ]) "CLI --harness list selects harnesses";
+  Unix.putenv "HARNESS" ""
+
 let () =
   let root = find_root (Sys.getcwd ()) 10 in
   test_matrix_and_render root;
@@ -160,4 +166,5 @@ let () =
   test_install_global root;
   test_install_many root;
   test_plugin root;
+  test_harness_selection_is_cli_only ();
   print_endline "test_yap: ok"

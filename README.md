@@ -14,13 +14,22 @@ Version 0.1.0 contains the authoring toolchain and one implemented skill:
 
 | Skill | Job | Status |
 |---|---|---|
-| `iiuc` | Turn messy or dictated input into a TL;DR and IIUC playback, then stop for confirmation | implemented |
-| `commit-fmt` | Draft a commit message: TL;DR, For humans (ELI5, Problem, Solution), For LLMs (changed, contracts, verification, risk) | implemented |
+| `iiuc` | Messy input to TL;DR and IIUC playback, then stop | implemented |
+| `ask` | Interview until a buildable request is clear | implemented |
+| `search` | Search repo, history, web, archive; report with sources | implemented |
+| `red-chair` | Read-only adversarial pass with next steps | implemented |
+| `teach` | First-principles explanation grounded in the repo | implemented |
+| `dossier` | Deep-dive learning document; explores, never decides | implemented |
+| `swipe` | External-repo adoption report with citations | implemented |
+| `tldr` | Read-only primer over a diff for a human reviewer | implemented |
+| `debug` | Root cause proven before any fix | implemented |
+| `verify` | Fresh checks and exact outputs before "done" | implemented |
+| `commit-fmt` | Commit message: TL;DR, For humans, For LLMs | implemented |
+| `add-skill` | Gatekeeper for adding the next skill | implemented |
 
-The designed roster in bp3-docs also names `ask`, `red-chair`, `search`,
-`teach`, `dossier`, `swipe`, `tldr`, `debug`, `verify`, and `add-skill`.
-They enter this repo only through the `add-skill` gates; a roster entry is
-not an implementation.
+The full designed roster from bp3-docs is implemented above. The next
+skill enters only through the `add-skill` gates; a roster entry in a
+design doc is not an implementation.
 
 ## Layout
 
@@ -46,15 +55,16 @@ dune exec yap -- install --root . --harness pi -g
 dune exec yap -- new <skill-id> --description "<one sentence>"
 ./scripts/install-hooks.sh        # enable the committed pre-commit gate
 make install                      # dune install: put the yap binary in the switch
-make install-skills               # install skills globally (HARNESS=pi by default)
+make install-skills               # install skills: [harness] [global|local-dir]
+                                  #   make install-skills pi global
+                                  #   make install-skills pi local-dir DIR=/path/to/project
 ```
 
-Harness selection, for `render` and `install`, in precedence order:
-`--harness` flags (comma-separated or repeated) beat the `HARNESS`
-environment variable (also comma-separated, for example
-`HARNESS=pi,codex,claude`), which beats the default of pi alone.
-`render --all` ignores both. The Makefile's `HARNESS` variable feeds the
-same mechanism (`HARNESS=pi,codex make install-skills`). Selecting two
+Harness selection, for `render` and `install`, is a CLI input only:
+`--harness` flags (comma-separated or repeated, for example
+`--harness pi,codex,claude`), defaulting to pi alone. No environment
+variable selects harnesses. `render --all` ignores `--harness`.
+Selecting two
 harnesses that share one skills root in the chosen scope (Codex and Muse
 in `.agents/skills`) is refused before anything is written.
 
