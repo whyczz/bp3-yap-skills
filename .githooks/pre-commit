@@ -1,0 +1,24 @@
+#!/bin/sh
+# bp3-yap-skills pre-commit gate: build, format check, skill check, tests.
+# Install with ./scripts/install-hooks.sh. Bypass only deliberately:
+# git commit --no-verify (and say why in the commit message).
+set -eu
+
+cd "$(git rev-parse --show-toplevel)"
+
+echo "pre-commit: dune build"
+dune build
+
+echo "pre-commit: ocamlformat check"
+dune build @fmt || {
+  echo "pre-commit: formatting differs; run: dune fmt" >&2
+  exit 1
+}
+
+echo "pre-commit: yap check"
+dune exec yap -- check --root .
+
+echo "pre-commit: dune test"
+dune test
+
+echo "pre-commit: ok"

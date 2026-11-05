@@ -26,24 +26,24 @@ not an implementation.
 ```text
 skills/<skill-id>/SKILL.md.j2   authored source, one directory per skill
 templates/skill/SKILL.md.j2     scaffolder template
-harnesses.toml                  harness paths and invocation spellings
-src/yap/                        renderer, linter, scaffolder, installer
+harnesses.json                  harness paths and invocation spellings
+lib/, bin/                      OCaml renderer, linter, scaffolder, installer
 tests/                          tooling tests
 generated/                      render output (not committed)
 ```
 
 ## Use
 
-Requirements: Python 3.11+ and uv. Jinja2 is an authoring-time dependency
-only; installed skills are plain Markdown with no Python dependency.
+Requirements: OCaml 5.1+, opam, and dune. Build once with `opam install . --deps-only` (or use an existing switch with cmdliner and yojson), then `dune build`. Installed skills are plain Markdown with no runtime dependency.
 
 ```sh
-uv run yap check
-uv run yap render --harness pi
-uv run yap render --all
-uv run yap install --harness pi --target /path/to/project
-uv run yap new <skill-id> --description "<one sentence>"
-uv run pytest
+make check                        # build + yap check + tests
+dune exec yap -- check --root .
+dune exec yap -- render --root . --harness pi
+dune exec yap -- render --root . --all
+dune exec yap -- install --root . --harness pi --target /path/to/project
+dune exec yap -- new <skill-id> --description "<one sentence>"
+./scripts/install-hooks.sh        # enable the committed pre-commit gate
 ```
 
 `install --harness pi` is the tested v1 path. It writes rendered skills to
@@ -54,10 +54,7 @@ it did not install unless `--force` is given.
 ## Authoring rules
 
 - One job per skill, stated in one sentence in the frontmatter description.
-- Templates may use the harness context (`harness.id`, `harness.display`,
-  `invocation`, `skill_id`, `version`) and narrow conditionals for real
-  harness differences. No custom filters, macros, or logic that changes the
-  skill's behavior per harness without a test naming the difference.
+- Templates use a deliberately tiny Jinja-shaped engine in `lib/template.ml`: variables (`skill_id`, `version`, `invocation`, `harness.id`, `harness.display`) and `if ==` / `if !=` conditionals only. No filters, macros, or loops. Logic that changes a skill's behavior per harness needs a test naming the difference.
 - Rendered files are derived. Never hand-edit `generated/`.
 - A new skill starts with `yap new`, but scaffolding is not approval. The
   add-skill gates (prior-art search, red chair, adversarial trigger tests,

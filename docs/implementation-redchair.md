@@ -11,15 +11,18 @@ around the sources. pi is the first tested harness.
 
 ## Attacks and verdicts
 
-### 1. Jinja turns skills into programs
+### 1. Templating turns skills into programs
 
 Full Jinja can hide behavior in loops, macros, and filters until a skill is
 code with worse tooling than code. bp2's typed factory is the warning.
+Jingoo (the OCaml Jinja clone) would import that whole surface for five
+variables.
 
-Verdict: survive with a narrow contract. Templates receive only `skill_id`,
-`version`, `invocation`, and the `harness` row. No custom filters or macros.
-Conditionals are allowed only for a rendered difference a test names. The
-linter counts harness conditionals and warns above four per skill.
+Verdict: survive with a narrower contract than any off-the-shelf engine.
+`lib/template.ml` implements only variable substitution and nestable
+`if ==` / `if !=` conditionals over the harness context, strict on unknown
+names. No filters, macros, or loops exist to abuse. The linter counts
+harness conditionals and warns above four per skill.
 
 ### 2. Four rendered copies duplicate one document
 
@@ -62,15 +65,19 @@ renders under StrictUndefined for every harness, no unresolved template
 markers, no TODO scaffolding left, README names every implemented skill,
 and a 500-line ceiling. Taste stays in review.
 
-### 6. Python is the wrong stack for bp3
+### 6. Which language builds the toolchain
 
-bp3's control plane is planned in OCaml, and bp1's Python test pain is real.
+Python plus Jinja was the first working build (one local commit, never
+pushed). It was challenged on review: bp3's preference is OCaml for types
+and build speed, bp1's Python test pain is on record, and a second
+language for a five-variable template engine is a cost with no buyer.
 
-Verdict: accepted for authoring only. This repo's deliverable is Markdown;
-Python plus Jinja2 is the smallest honest templating tool, runs through uv,
-and is absent from installed skills and from every runtime path. If the
-renderer ever needs to run inside an agent loop, this decision gets its own
-packet and a rewrite is on the table.
+Verdict: OCaml, via dune. The toolchain builds to one `yap` executable
+(`dune build`, `dune exec yap -- ...`), depends only on cmdliner and
+yojson beyond the standard library, and its tests run under `dune test`.
+A committed pre-commit hook (`.githooks/pre-commit`) runs build,
+ocamlformat check, `yap check`, and `dune test`, so the linter cannot be
+quietly skipped at commit time.
 
 ### 7. Hand-edits to installed skills get clobbered
 
@@ -81,10 +88,11 @@ of the same name is also refused.
 
 ## Locked v1 shape
 
-- Jinja2 sources at `skills/<id>/SKILL.md.j2`; plain Markdown out.
-- `harnesses.toml` is the only harness knowledge; pi tested first.
-- One CLI: `check`, `render`, `install`, `new`, `list`.
-- Unit tests use temporary directories and the real Jinja renderer. They are
-  committed with the toolchain, not left as probes.
+- Jinja-shaped sources at `skills/<id>/SKILL.md.j2`; plain Markdown out,
+  rendered by the in-repo mini engine, not Jinja or Jingoo.
+- `harnesses.json` is the only harness knowledge; pi tested first.
+- One OCaml CLI, `yap`: `check`, `render`, `install`, `new`, `list`.
+- `dune test` covers rendering, lint, scaffold, and install against
+  temporary directories. Tests are committed with the toolchain.
 - Only `iiuc` is implemented in v0.1.0. The designed roster stays designed
   until each skill passes the add-skill gates.

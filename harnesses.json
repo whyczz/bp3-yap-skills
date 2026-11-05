@@ -1,0 +1,26 @@
+{
+  "pi": {
+    "display": "pi",
+    "skills_dir": ".pi/skills",
+    "invocation": "/skill:{skill}",
+    "tested": true
+  },
+  "claude": {
+    "display": "Claude",
+    "skills_dir": ".claude/skills",
+    "invocation": "/{skill}",
+    "tested": false
+  },
+  "codex": {
+    "display": "Codex",
+    "skills_dir": ".agents/skills",
+    "invocation": "${skill}",
+    "tested": false
+  },
+  "muse": {
+    "display": "Muse",
+    "skills_dir": ".agents/skills",
+    "invocation": "/{skill}",
+    "tested": false
+  }
+}
