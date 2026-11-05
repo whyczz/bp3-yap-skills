@@ -49,6 +49,24 @@ make install                      # dune install: put the yap binary in the swit
 make install-skills               # install skills globally (HARNESS=pi by default)
 ```
 
+Harness selection, for `render` and `install`, in precedence order:
+`--harness` flags (comma-separated or repeated) beat the `HARNESS`
+environment variable (also comma-separated, for example
+`HARNESS=pi,codex,claude`), which beats the default of pi alone.
+`render --all` ignores both. The Makefile's `HARNESS` variable feeds the
+same mechanism (`HARNESS=pi,codex make install-skills`). Selecting two
+harnesses that share one skills root in the chosen scope (Codex and Muse
+in `.agents/skills`) is refused before anything is written.
+
+Plugin bundles: `dune exec yap -- plugin --root . --harness pi,claude,codex,muse`
+writes `generated/plugin/<harness>/bp3/`. Claude and Codex namespace the
+skills as `bp3:<skill>` (`/bp3:iiuc` on Claude, `$bp3:iiuc` on Codex).
+Muse installs the same bundle as a native plugin (skill ids
+`plugin:bp3:<skill>`). Pi has no plugin namespace, so it ships a pi
+package: skills stay `/skill:<name>` and generated prompts give
+`/<name>`. Only harnesses with a real plugin or package system get a
+bundle; the bundle is a distribution wrapper, not a new source.
+
 Rendered output is plain Markdown under `generated/<harness>/`: a portable
 `SKILL.md` per skill, plus, for pi only, a prompt template at
 `.pi/prompts/<skill>.md`. That template is what gives pi the exact

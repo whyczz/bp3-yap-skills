@@ -115,6 +115,42 @@ let test_install_global root =
   let lock = Fs_util.read_file (Filename.concat (Filename.concat base "skills") "yap-skills.lock.json") in
   assert_true (contains "\"scope\": \"global\"" lock) "global lock records scope"
 
+let test_install_many root =
+  let target = Filename.temp_dir "yap-many-" "" in
+  let written = Core.install_many root [ ("pi", target); ("claude", target) ] Core.Project false in
+  assert_true
+    (List.exists (fun path -> contains "commit-fmt" path) written)
+    "multi-harness install writes both harnesses";
+  let clash_target = Filename.temp_dir "yap-clash-" "" in
+  let refused =
+    try
+      ignore (Core.install_many root [ ("codex", clash_target); ("muse", clash_target) ] Core.Project false);
+      false
+    with Failure _ -> true
+  in
+  assert_true refused "codex and muse sharing .agents must be refused";
+  assert_true
+    (not (Sys.file_exists (Filename.concat clash_target ".agents")))
+    "collision refusal happens before any writes"
+
+let test_plugin root =
+  let out = Filename.temp_dir "yap-plugin-" "" in
+  let written = Core.write_plugin root out [] in
+  let expect path = assert_true (Sys.file_exists (Filename.concat out path)) ("plugin file: " ^ path) in
+  expect "claude/bp3/.claude-plugin/plugin.json";
+  expect "claude/bp3/skills/iiuc/SKILL.md";
+  expect "codex/bp3/.codex-plugin/plugin.json";
+  expect "muse/bp3/.muse-plugin/plugin.json";
+  expect "pi/bp3/package.json";
+  expect "pi/bp3/prompts/iiuc.md";
+  assert_true (List.length written >= 12) "plugin writes bundles for all supported harnesses";
+  let claude_skill = Fs_util.read_file (Filename.concat out "claude/bp3/skills/iiuc/SKILL.md") in
+  assert_true (contains "/bp3:iiuc" claude_skill) "claude plugin skill is namespaced bp3:";
+  let codex_skill = Fs_util.read_file (Filename.concat out "codex/bp3/skills/iiuc/SKILL.md") in
+  assert_true (contains "$bp3:iiuc" codex_skill) "codex plugin skill is namespaced bp3:";
+  let muse_manifest = Fs_util.read_file (Filename.concat out "muse/bp3/.muse-plugin/plugin.json") in
+  assert_true (contains "\"schemaVersion\": 1" muse_manifest) "muse manifest declares schemaVersion 1"
+
 let () =
   let root = find_root (Sys.getcwd ()) 10 in
   test_matrix_and_render root;
@@ -122,4 +158,6 @@ let () =
   test_scaffold ();
   test_install root;
   test_install_global root;
+  test_install_many root;
+  test_plugin root;
   print_endline "test_yap: ok"

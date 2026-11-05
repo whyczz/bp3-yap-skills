@@ -34,3 +34,17 @@ home was touched.
 3. Claude remains honestly unverified. Its install paths come from the
    bp2 harness matrix and the output passes the Agent Skills common
    subset, but no authenticated Claude run has observed discovery yet.
+
+
+## 2026-11-05, plugin bundles, isolated homes
+
+`yap plugin --harness pi,claude,codex,muse` generated one `bp3` bundle
+per harness. Each was installed or validated with the real binary in a
+scratch home. No real user home was touched.
+
+| Harness | Bundle | Proof | Invocation |
+|---|---|---|---|
+| Claude 2.1.309 | `.claude-plugin/plugin.json` plus `skills/` | `claude plugin validate` clean; scratch marketplace install; `claude plugin details` lists Skills (2): commit-fmt, iiuc | `/bp3:<skill>` |
+| Codex 0.166.0 | `.codex-plugin/plugin.json` plus `skills/` | scratch marketplace add and `codex plugin add bp3@local-test`; prompt input lists `bp3:iiuc` | `$bp3:<skill>` |
+| Muse 1.4.14 | `.muse-plugin/plugin.json` (schemaVersion 1) plus `skills/` | `muse plugins validate` valid; `muse plugins install --scope user`; skill ids `plugin:bp3:iiuc` and `plugin:bp3:commit-fmt` | plugin skill ids |
+| pi 1.4.0 | `package.json` (`pi-package`) plus `skills/` and `prompts/` | `pi install <local package>` into a scratch agent dir; RPC `get_commands` discovers the prompts | `/skill:<name>` and `/<name>`; pi has no plugin namespace |

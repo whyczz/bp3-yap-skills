@@ -101,6 +101,10 @@ of the same name is also refused.
   itself stays a portable `SKILL.md`.
 - Install scope is explicit: `install -p/--project` or
   `install -g/--global`, never both, never implicit.
+- Harness selection is data plus one convention: `--harness` flags
+  (comma-separated or repeated), else `$HARNESS` (comma-separated), else
+  pi. Two selected harnesses sharing a skills root in one scope are
+  refused up front.
 - `dune test` covers rendering, lint, scaffold, and install against
   temporary directories. Tests are committed with the toolchain.
 - Only `iiuc` is implemented in v0.1.0. The designed roster stays designed

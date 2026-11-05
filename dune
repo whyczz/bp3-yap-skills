@@ -8,4 +8,13 @@
  (action
   (progn
    (run %{bin:yap} check --root .)
-   (run %{bin:yap} render --root . --all --out rendered))))
+   (run %{bin:yap} render --root . --all --out rendered)
+   (run
+    %{bin:yap}
+    plugin
+    --root
+    .
+    --harness
+    pi,claude,codex,muse
+    --out
+    rendered-plugin))))

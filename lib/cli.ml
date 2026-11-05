@@ -7,6 +7,25 @@ let print_error message =
   prerr_endline ("yap: " ^ message);
   2
 
+let split_harness_list values =
+  values |> List.concat_map (String.split_on_char ',') |> List.map String.trim |> List.filter (fun value -> value <> "")
+
+let selected_harnesses flags =
+  let from_flags = split_harness_list flags in
+  if from_flags <> [] then from_flags
+  else
+    match Sys.getenv_opt "HARNESS" with
+    | Some value ->
+        let from_env = split_harness_list [ value ] in
+        if from_env = [] then [ "pi" ] else from_env
+    | None -> [ "pi" ]
+
+let harness_arg =
+  Arg.(
+    value & opt_all string []
+    & info [ "harness" ] ~docv:"IDS"
+        ~doc:"Harness ids, comma-separated or repeated. Falls back to $HARNESS (also comma-separated), then pi.")
+
 let root_term =
   Arg.(value & opt string "." & info [ "root" ] ~docv:"DIR" ~doc:"Repository root. Defaults to the current directory.")
 
@@ -35,9 +54,9 @@ let check_cmd =
     (Cmd.info "check" ~doc:"Lint sources and render every harness.")
     (capture Term.(const run_check $ root_term $ json_term))
 
-let run_render root json harness all out =
+let run_render root json harness_flags all out =
   try
-    let harness_ids = match (harness, all) with Some id, _ -> [ id ] | None, true -> [] | None, false -> [ "pi" ] in
+    let harness_ids = if all then [] else selected_harnesses harness_flags in
     let out_dir = Option.value out ~default:(Filename.concat root "generated") in
     let written = Core.write_rendered root out_dir harness_ids in
     if json then `List (written |> List.map (fun path -> `String path)) |> Yojson.Safe.to_string |> print_endline
@@ -48,16 +67,35 @@ let run_render root json harness all out =
   | Sys_error message -> print_error message
 
 let render_cmd =
-  let harness =
-    Arg.(value & opt (some string) None & info [ "harness" ] ~docv:"ID" ~doc:"One harness id. Defaults to pi.")
-  in
-  let all = Arg.(value & flag & info [ "all" ] ~doc:"Render every harness.") in
+  let harness = harness_arg in
+  let all = Arg.(value & flag & info [ "all" ] ~doc:"Render every harness, ignoring --harness and $HARNESS.") in
   let out =
     Arg.(value & opt (some string) None & info [ "out" ] ~docv:"DIR" ~doc:"Output root. Defaults to generated/.")
   in
   Cmd.v
     (Cmd.info "render" ~doc:"Render skills for one or all harnesses.")
     (capture Term.(const run_render $ root_term $ json_term $ harness $ all $ out))
+
+let run_plugin root json harness_flags out =
+  try
+    let harness_ids = selected_harnesses harness_flags in
+    let out_dir = Option.value out ~default:(Filename.concat root "generated/plugin") in
+    let written = Core.write_plugin root out_dir harness_ids in
+    if json then `List (written |> List.map (fun path -> `String path)) |> Yojson.Safe.to_string |> print_endline
+    else written |> List.iter print_endline;
+    0
+  with
+  | Failure message -> print_error message
+  | Sys_error message -> print_error message
+
+let plugin_cmd =
+  let harness = harness_arg in
+  let out =
+    Arg.(value & opt (some string) None & info [ "out" ] ~docv:"DIR" ~doc:"Output root. Defaults to generated/plugin/.")
+  in
+  Cmd.v
+    (Cmd.info "plugin" ~doc:"Render plugin or package bundles (bp3) for selected harnesses.")
+    (capture Term.(const run_plugin $ root_term $ json_term $ harness $ out))
 
 let default_global_base harness_id =
   let home = match Sys.getenv_opt "HOME" with Some home -> home | None -> failwith "HOME is not set" in
@@ -70,18 +108,24 @@ let default_global_base harness_id =
   | "codex" | "muse" -> Filename.concat home ".agents"
   | other -> failwith ("unknown harness: " ^ other)
 
-let run_install root json harness target project global force =
+let run_install root json harness_flags target project global force =
   try
-    let scope, resolved_target =
+    let harness_ids = selected_harnesses harness_flags in
+    let scope, installs =
       match (project, global, target) with
-      | true, false, Some target -> (Core.Project, target)
+      | true, false, Some target -> (Core.Project, harness_ids |> List.map (fun id -> (id, target)))
       | true, false, None -> failwith "install -p needs --target DIR (the project directory)"
-      | false, true, Some base -> (Core.Global, base)
-      | false, true, None -> (Core.Global, default_global_base harness)
+      | false, true, Some base when List.length harness_ids = 1 ->
+          (Core.Global, harness_ids |> List.map (fun id -> (id, base)))
+      | false, true, Some _ ->
+          failwith
+            "install -g --target names one harness global base; pass it with exactly one --harness (or drop --target \
+             for per-harness defaults)"
+      | false, true, None -> (Core.Global, harness_ids |> List.map (fun id -> (id, default_global_base id)))
       | false, false, _ -> failwith "choose exactly one install scope: -p/--project or -g/--global"
       | true, true, _ -> failwith "install scopes are mutually exclusive: choose -p/--project or -g/--global"
     in
-    let written = Core.install root resolved_target harness scope force in
+    let written = Core.install_many root installs scope force in
     if json then `List (written |> List.map (fun path -> `String path)) |> Yojson.Safe.to_string |> print_endline
     else written |> List.iter print_endline;
     0
@@ -91,7 +135,7 @@ let run_install root json harness target project global force =
   | Invalid_argument message -> print_error message
 
 let install_cmd =
-  let harness = Arg.(value & opt string "pi" & info [ "harness" ] ~docv:"ID" ~doc:"Harness id. Defaults to pi.") in
+  let harness = harness_arg in
   let target =
     Arg.(
       value
@@ -167,5 +211,5 @@ let main () =
     Cmd.info "yap" ~version:"0.1.0" ~doc:"bp3 yap skills toolchain."
       ~man:[ `S "DESCRIPTION"; `P "Author, render, lint, and install portable yap skills." ]
   in
-  ignore (Cmd.eval (Cmd.group info [ check_cmd; render_cmd; install_cmd; new_cmd; list_cmd ]));
+  ignore (Cmd.eval (Cmd.group info [ check_cmd; render_cmd; plugin_cmd; install_cmd; new_cmd; list_cmd ]));
   exit !last_exit

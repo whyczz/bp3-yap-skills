@@ -14,20 +14,26 @@
     "skills_dir": ".claude/skills",
     "invocation": "/{skill}",
     "global_skills_dir": "skills",
-    "tested": false
+    "tested": false,
+    "plugin_invocation": "/bp3:{skill}",
+    "plugin_manifest_dir": ".claude-plugin"
   },
   "codex": {
     "display": "Codex",
     "skills_dir": ".agents/skills",
     "invocation": "${skill}",
     "global_skills_dir": "skills",
-    "tested": true
+    "tested": true,
+    "plugin_invocation": "$bp3:{skill}",
+    "plugin_manifest_dir": ".codex-plugin"
   },
   "muse": {
     "display": "Muse",
     "skills_dir": ".agents/skills",
     "invocation": "/{skill}",
     "global_skills_dir": "skills",
-    "tested": true
+    "tested": true,
+    "plugin_invocation": "/{skill}",
+    "plugin_manifest_dir": ".muse-plugin"
   }
 }

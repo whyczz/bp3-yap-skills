@@ -89,6 +89,12 @@ let render_all root harness_ids =
       in
       (harness, rendered))
 
+let plugin_name = "bp3"
+let plugin_description = "bp3 yap skills: human-invoked design skills for coding agents."
+
+let render_plugin_source root harness source =
+  render_source_with_invocation root harness source (Harness.plugin_invocation harness (skill_id_of_source source))
+
 let split_frontmatter body =
   let lines = String.split_on_char '\n' body in
   match lines with
@@ -165,6 +171,124 @@ let write_rendered root out_dir harness_ids =
                 | None -> None)
       in
       skill_files @ prompt_files)
+
+let plugin_manifest root harness skill_ids =
+  let ver = version root in
+  match harness.Harness.id with
+  | "claude" ->
+      `Assoc
+        [
+          ("name", `String plugin_name);
+          ("version", `String ver);
+          ("description", `String plugin_description);
+          ("author", `Assoc [ ("name", `String "whyczz") ]);
+        ]
+  | "codex" ->
+      `Assoc
+        [
+          ("name", `String plugin_name);
+          ("version", `String ver);
+          ("description", `String plugin_description);
+          ("skills", `String "./skills/");
+          ( "interface",
+            `Assoc
+              [
+                ("displayName", `String "bp3 yap skills");
+                ("shortDescription", `String "Human-invoked design skills");
+                ("longDescription", `String "Portable yap skills for sync, design, and review.");
+                ("developerName", `String "whyczz");
+                ("category", `String "Productivity");
+                ("capabilities", `List [ `String "Interactive"; `String "Read" ]);
+              ] );
+        ]
+  | "muse" ->
+      `Assoc
+        [
+          ("name", `String plugin_name);
+          ("version", `String ver);
+          ("description", `String plugin_description);
+          ("schemaVersion", `Int 1);
+          ("compat", `Assoc [ ("manifestDir", `String ".muse-plugin") ]);
+          ( "capabilities",
+            `Assoc
+              [
+                ( "skills",
+                  `List
+                    (skill_ids
+                    |> List.map (fun id ->
+                        `Assoc [ ("id", `String id); ("path", `String ("./skills/" ^ id ^ "/SKILL.md")) ])) );
+              ] );
+        ]
+  | "pi" ->
+      `Assoc
+        [
+          ("name", `String "bp3-yap-skills");
+          ("version", `String ver);
+          ("description", `String plugin_description);
+          ("keywords", `List [ `String "pi-package" ]);
+          ("pi", `Assoc [ ("skills", `List [ `String "./skills" ]); ("prompts", `List [ `String "./prompts/*.md" ]) ]);
+        ]
+  | other -> failwith ("no plugin bundle for harness: " ^ other)
+
+let write_plugin root out_dir harness_ids =
+  let harnesses = Harness.load root in
+  let selected =
+    match harness_ids with
+    | [] -> harnesses
+    | ids ->
+        ids
+        |> List.map (fun id ->
+            match Harness.find harnesses id with Some harness -> harness | None -> failwith ("unknown harness: " ^ id))
+  in
+  selected
+  |> List.concat_map (fun harness ->
+      let base = Fs_util.join (Fs_util.join out_dir harness.Harness.id) plugin_name in
+      let sources = skill_sources root in
+      let skill_ids = sources |> List.map skill_id_of_source in
+      let skill_files =
+        sources
+        |> List.map (fun source ->
+            let skill_id = skill_id_of_source source in
+            match render_plugin_source root harness source with
+            | Error message -> failwith (skill_id ^ ": " ^ message)
+            | Ok body ->
+                let dest = Fs_util.join (Fs_util.join (Fs_util.join base "skills") skill_id) "SKILL.md" in
+                Fs_util.mkdir_p (Filename.dirname dest);
+                Fs_util.write_file dest body;
+                dest)
+      in
+      let prompt_files =
+        match harness.Harness.prompts_dir with
+        | None -> []
+        | Some _ ->
+            sources
+            |> List.filter_map (fun source ->
+                match render_prompt_source root harness source with
+                | None -> None
+                | Some body ->
+                    let dest = Fs_util.join (Fs_util.join base "prompts") (skill_id_of_source source ^ ".md") in
+                    Fs_util.mkdir_p (Filename.dirname dest);
+                    Fs_util.write_file dest body;
+                    Some dest)
+      in
+      let manifest_path =
+        match harness.Harness.plugin_manifest_dir with
+        | Some manifest_dir -> Fs_util.join (Fs_util.join base manifest_dir) "plugin.json"
+        | None -> Fs_util.join base "package.json"
+      in
+      Fs_util.mkdir_p (Filename.dirname manifest_path);
+      Fs_util.write_file manifest_path (Yojson.Safe.pretty_to_string (plugin_manifest root harness skill_ids) ^ "\n");
+      let readme_path = Fs_util.join base "README.md" in
+      let readme =
+        Printf.sprintf
+          "# bp3 yap skills (%s)\n\n\
+           %s\n\n\
+           Skills: %s. Generated by `yap plugin`; do not hand-edit. Invoke through this harness's plugin or package \
+           mechanism; on Claude and Codex, skills are namespaced as bp3:<skill>.\n"
+          harness.Harness.display plugin_description (String.concat ", " skill_ids)
+      in
+      Fs_util.write_file readme_path readme;
+      skill_files @ prompt_files @ [ manifest_path; readme_path ])
 
 let parse_frontmatter body =
   let lines = String.split_on_char '\n' body in
@@ -263,6 +387,14 @@ let scaffold root skill_id description =
   Fs_util.write_file dest body;
   dest
 
+let install_roots target harness scope =
+  match scope with
+  | Project ->
+      (Fs_util.join target harness.Harness.skills_dir, Option.map (Fs_util.join target) harness.Harness.prompts_dir)
+  | Global ->
+      ( Fs_util.join target harness.Harness.global_skills_dir,
+        Option.map (Fs_util.join target) harness.Harness.global_prompts_dir )
+
 let install root target harness_id scope force =
   let harnesses = Harness.load root in
   let harness =
@@ -271,14 +403,7 @@ let install root target harness_id scope force =
     | None -> failwith ("unknown harness: " ^ harness_id)
   in
   let rendered = match render_all root [ harness_id ] with [ (_, rows) ] -> rows | _ -> [] in
-  let skills_root, prompts_root =
-    match scope with
-    | Project ->
-        (Fs_util.join target harness.Harness.skills_dir, Option.map (Fs_util.join target) harness.Harness.prompts_dir)
-    | Global ->
-        ( Fs_util.join target harness.Harness.global_skills_dir,
-          Option.map (Fs_util.join target) harness.Harness.global_prompts_dir )
-  in
+  let skills_root, prompts_root = install_roots target harness scope in
   let lock_path = Fs_util.join skills_root "yap-skills.lock.json" in
   let recorded = ref [] in
   let lock_harness = ref None in
@@ -350,3 +475,29 @@ let install root target harness_id scope force =
   Fs_util.mkdir_p skills_root;
   Fs_util.write_file lock_path (Yojson.Safe.pretty_to_string lock ^ "\n");
   written
+
+let install_many root installs scope force =
+  let harnesses = Harness.load root in
+  let resolved =
+    installs
+    |> List.map (fun (harness_id, target) ->
+        match Harness.find harnesses harness_id with
+        | Some harness -> (harness, target)
+        | None -> failwith ("unknown harness: " ^ harness_id))
+  in
+  let roots =
+    resolved |> List.map (fun (harness, target) -> (harness.Harness.id, fst (install_roots target harness scope)))
+  in
+  let rec check_seen = function
+    | [] -> ()
+    | (id, root) :: rest ->
+        (match List.find_opt (fun (_, other_root) -> other_root = root) rest with
+        | Some (other_id, _) ->
+            failwith
+              (Printf.sprintf "harnesses %s and %s share skills root %s in this scope; install one variant at a time" id
+                 other_id root)
+        | None -> ());
+        check_seen rest
+  in
+  check_seen roots;
+  resolved |> List.concat_map (fun (harness, target) -> install root target harness.Harness.id scope force)
