@@ -15,6 +15,23 @@ commit only when the user's invocation explicitly asks for that
 ("commit this", "amend", or the like). Formatting is the skill; landing
 is not.
 
+## Branch and landing policy
+
+- The user's default/integration branch is **`master`**, not `main`. Use
+  `master` in plans, commands, and promotion language; never silently substitute
+  `main` because it is a tool's or hosting provider's default.
+- Inspect the actual local branches, remote default, and upstream before any
+  commit or push. If a repository only has `main`, report the mismatch; rename
+  it only with explicit user authorization. Preserve history, establish and
+  verify remote `master` as the default before removing the old branch name,
+  and stop if the remote moved unexpectedly.
+- This preference does **not** mean every commit belongs on `master`. Keep
+  Quest/feature work on its named branch until the user authorizes integration.
+  Honor split instructions such as “skill fix on master and pushed; Exp 1 on
+  the Quest branch” with separate commits and separately scoped pushes.
+- A commit request does not authorize a merge or push. Do not push all branches,
+  promote Quest work, or force-update history to satisfy the branch preference.
+
 ## The format
 
 ```text
