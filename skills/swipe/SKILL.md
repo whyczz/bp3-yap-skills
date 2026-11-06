@@ -1,11 +1,11 @@
 ---
-name: {{ skill_id }}
+name: swipe
 description: "Learn from an external repo by reading it against a named target and generating a build-versus-borrow adoption report with citations."
 ---
 
 # Swipe
 
-Use when the user invokes `{{ invocation }}` or asks what another repo,
+Use when the user explicitly invokes this skill or asks what another repo,
 library, or project does that this one should learn from, steal, or
 avoid. The product is a report. This skill copies no code and starts no
 port.

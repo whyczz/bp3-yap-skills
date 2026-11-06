@@ -1,11 +1,11 @@
 ---
-name: {{ skill_id }}
+name: commit
 description: "Draft a git commit message in the bp3 format: TL;DR, a human section (ELI5, problem, solution), and a structured section for LLMs."
 ---
 
 # Commit format
 
-Use when the user invokes `{{ invocation }}`, asks for a commit message,
+Use when the user explicitly invokes this skill, asks for a commit message,
 or asks you to commit work. Inspect the actual diff first (`git status`,
 `git diff`, `git diff --cached`, and the branch's recent commits for house
 style). Never write the message from the task description alone.

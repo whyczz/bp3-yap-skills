@@ -1,11 +1,11 @@
 ---
-name: {{ skill_id }}
+name: search
 description: "Search the repo, git history, web, and available session archive for an answer and report it with sources."
 ---
 
 # Search
 
-Use when the user invokes `{{ invocation }}` or asks an exploratory
+Use when the user explicitly invokes this skill or asks an exploratory
 question whose answer lives in code, history, prior sessions, or the
 web: "have we tried this", "where is X handled", "what did we decide".
 

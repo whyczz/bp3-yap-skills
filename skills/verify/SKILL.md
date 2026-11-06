@@ -1,11 +1,11 @@
 ---
-name: {{ skill_id }}
+name: verify
 description: "Verify a claim or a finished change by running the real checks now and reporting exact outputs before anyone says done."
 ---
 
 # Verify
 
-Use when the user invokes `{{ invocation }}`, asks "does it work", or
+Use when the user explicitly invokes this skill, asks "does it work", or
 before any claim that work is complete, fixed, or passing. Verification
 is fresh evidence, produced in this session, not remembered green.
 

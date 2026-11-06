@@ -1,11 +1,11 @@
 ---
-name: {{ skill_id }}
+name: teach
 description: "Explain a concept, system, or diff from first principles, grounded in this repo, so the user builds intuition they can reuse."
 ---
 
 # Teach
 
-Use when the user invokes `{{ invocation }}`, asks a noob question, or
+Use when the user explicitly invokes this skill, asks a noob question, or
 wants to understand a change well enough to judge the next one. The
 product is the user's intuition, not a summary.
 

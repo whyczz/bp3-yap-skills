@@ -1,11 +1,11 @@
 ---
-name: {{ skill_id }}
+name: debug
 description: "Debug systematically: reproduce, isolate, and prove a root cause before proposing any fix."
 ---
 
 # Debug
 
-Use when the user invokes `{{ invocation }}`, reports a bug, a failing
+Use when the user explicitly invokes this skill, reports a bug, a failing
 test, or "it stopped working". Iron law: no fix proposal before root
 cause evidence. A plausible story is not a root cause.
 

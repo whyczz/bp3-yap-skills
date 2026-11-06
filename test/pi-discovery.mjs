@@ -16,7 +16,7 @@ try {
   const agentDir = path.join(home, '.pi/agent');
   const cwd = path.join(home, 'project');
   fs.mkdirSync(cwd);
-  const binary = path.join(root, '_build/default/bin/main.exe');
+  const binary = path.join(root, 'scripts/yap');
   for (const [harness, target] of [['pi', agentDir], ['codex', path.join(home, '.agents')]]) {
     execFileSync(binary, ['install', '--root', root, '--harness', harness, '-g', '--target', target]);
   }

@@ -1,12 +1,7 @@
----
-name: {{ skill_id }}
-description: TODO: one sentence stating the job this skill does.
----
+# New skill
 
-# {{ skill_id }}
-
-TODO: when a human should invoke this skill (`{{ invocation }}`), with three
-example invocations and three near-misses that must not trigger it.
+TODO: when a human should invoke this skill, with three example invocations
+and three near-misses that must not trigger it.
 
 ## Steps
 

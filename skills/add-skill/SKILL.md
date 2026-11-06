@@ -1,11 +1,11 @@
 ---
-name: {{ skill_id }}
+name: add-skill
 description: "Author one new yap skill through its gates: clarify, search prior art, optional log mining, red chair, and adversarial trigger tests before writing."
 ---
 
 # Add skill
 
-Use when the user invokes `{{ invocation }}` or asks to add a skill to
+Use when the user explicitly invokes this skill or asks to add a skill to
 bp3-yap-skills. This skill is the roster's immune system. It writes
 nothing until every gate passes; failing a gate produces a report, not
 a directory. Absorb-or-reject is the common outcome.
@@ -41,9 +41,9 @@ a directory. Absorb-or-reject is the common outcome.
    plus two hostile cases (keyword match that wants a different skill;
    stateful work wearing yap words). Run against a draft in a scratch
    session and keep the transcripts for the report.
-6. Write, only now. Scaffold with `yap new <id>`, replace every TODO
+6. Write, only now. Scaffold with `./scripts/yap new <id>`, replace every TODO
    (the linter rejects TODOs), add the README roster row, and pass
-   `dune build @render` and `dune test`. Commit the design record beside
+   `make check`. Commit the design record beside
    the change: search table, mined evidence where it exists, chair
    verdict, and test transcripts.
 

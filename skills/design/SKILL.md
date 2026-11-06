@@ -1,11 +1,11 @@
 ---
-name: {{ skill_id }}
+name: design
 description: "Turn a known problem into a proposed design: TL;DR, ELI5, context, architecture, data models, functions, storage, and proposed milestones."
 ---
 
 # Design
 
-Use when the user invokes `{{ invocation }}` or asks for a design, an
+Use when the user explicitly invokes this skill or asks for a design, an
 architecture, or "how should we build this". The problem is known well
 enough to propose a solution shape. This skill proposes; it does not
 create Quests or Tasks on any board, request sign-off, or write code.

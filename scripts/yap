@@ -1,0 +1,141 @@
+#!/bin/bash
+# Portable static skills; Bash 3.2+, jq, and Mike Farah yq v4.
+set -euo pipefail
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=scripts/common.sh
+source "$script_dir/common.sh"
+# shellcheck source=scripts/install.sh
+source "$script_dir/install.sh"
+usage() {
+  printf '%s\n' 'Usage: scripts/yap <check|render|plugin|install|new|list> [options]' \
+    '  --root DIR          Source repository (default: this checkout)' \
+    '  --harness IDS       Comma-separated or repeated; default: pi' \
+    '  --out DIR           Output root for render/plugin' \
+    '  --all               Render every harness' \
+    '  -p --target DIR     Install into a project' \
+    '  -g [--target DIR]   Install globally (optional harness base)' \
+    '  --force             Replace modified active files, never force deletion' \
+    '  --dry-run           Preview installation without changing target files' \
+    '  --json              Machine-readable output' \
+    '  new ID --description TEXT   Scaffold; TODOs must be completed'
+}
+[[ $# -gt 0 ]] || { usage; exit 2; }
+command=$1; shift
+case "$command" in --help|-h|help) usage; exit 0 ;; esac
+root=$(dirname "$script_dir")
+harness_flags='' out='' scope='' target='' description='' skill_id=''
+force=false dry_run=false all=false json=false
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --help|-h) usage; exit 0 ;;
+    --root|--harness|--out|--target|--description)
+      [[ $# -ge 2 && -n $2 ]] || die "$1 needs a value"
+      case "$1" in
+        --root) root=$2 ;;
+        --harness) harness_flags="${harness_flags:+$harness_flags,}$2" ;;
+        --out) out=$2 ;;
+        --target) target=$2 ;;
+        --description) description=$2 ;;
+      esac
+      shift 2 ;;
+    -p|--project|-g|--global)
+      [[ -z $scope ]] || die 'choose exactly one scope: -p or -g'
+      case "$1" in -p|--project) scope=project ;; *) scope=global ;; esac
+      shift ;;
+    --force) force=true; shift ;;
+    --dry-run) dry_run=true; shift ;;
+    --all) all=true; shift ;;
+    --json) json=true; shift ;;
+    -*) die "unknown option: $1" ;;
+    *) [[ $command == new && -z $skill_id ]] || die "unexpected argument: $1"; skill_id=$1; shift ;;
+  esac
+done
+for dependency in jq yq; do need "$dependency"; done
+[[ $(yq --version) == *github.com/mikefarah/yq/*'version v4.'* ]] || die 'requires Mike Farah yq v4 (brew install yq)'
+[[ -d $root ]] || die "repository root does not exist: $root"
+root=$(cd "$root" && pwd)
+work=$(mktemp -d "${TMPDIR:-/tmp}/yap.XXXXXX")
+trap 'rm -rf -- "$work"' EXIT
+json_file "$root/harnesses.json"
+selected=()
+if [[ $all == true ]]; then
+  [[ $command == render ]] || die '--all is only supported for render'
+  while IFS= read -r h; do selected+=("$h"); done < <(jq -r 'keys[]' "$root/harnesses.json")
+else
+  while IFS= read -r h; do selected+=("$h"); done < <(printf '%s\n' "${harness_flags:-pi}" | tr ',' '\n' | awk '{$1=$1; if (length) print}')
+fi
+[[ ${#selected[@]} -gt 0 ]] || die 'no harness selected'
+for h in "${selected[@]}"; do
+  jq -e --arg h "$h" 'has($h)' "$root/harnesses.json" >/dev/null || die "unknown harness: $h"
+done
+render() {
+  local h base prompts
+  out=${out:-$root/generated}
+  for h in "${selected[@]}"; do
+    base="$out/$h"
+    prompts=$(field "$h" prompts_dir)
+    [[ -z $prompts ]] || prompts="$base/$prompts"
+    copy_skills "$base/$(field "$h" skills_dir)" "$prompts"
+    find "$base" -type f | LC_ALL=C sort
+  done
+}
+plugin() {
+  local h base manifest ids version invocation
+  out=${out:-$root/generated/plugin}
+  version=$(tr -d '\r\n' < "$root/VERSION")
+  ids=$(active_ids | jq -Rsc 'split("\n") | map(select(length > 0))')
+  for h in "${selected[@]}"; do
+    base="$out/$h/bp3"
+    if [[ $h == pi ]]; then copy_skills "$base/skills" "$base/prompts"
+    else copy_skills "$base/skills" ''; fi
+    manifest=$(field "$h" plugin_manifest_dir)
+    if [[ -n $manifest ]]; then manifest="$base/$manifest/plugin.json"
+    else manifest="$base/package.json"; fi
+    mkdir -p "$(dirname "$manifest")"
+    jq -n --arg h "$h" --arg version "$version" --argjson ids "$ids" '
+      {name:"bp3",version:$version,description:"bp3 yap skills: human-invoked design skills for coding agents."} |
+      if $h == "claude" then . + {author:{name:"whyczz"}}
+      elif $h == "codex" then . + {skills:"./skills/",interface:{displayName:"bp3 yap skills",shortDescription:"Human-invoked design skills",longDescription:"Portable yap skills for sync, design, and review.",developerName:"whyczz",category:"Productivity",capabilities:["Interactive","Read"]}}
+      elif $h == "muse" then . + {schemaVersion:1,compat:{manifestDir:".muse-plugin"},capabilities:{skills:[$ids[] | {id:.,path:("./skills/" + . + "/SKILL.md")}]}}
+      elif $h == "pi" then . + {name:"bp3-yap-skills",keywords:["pi-package"],pi:{skills:["./skills"],prompts:["./prompts/*.md"]}}
+      else error("unsupported plugin harness") end
+    ' > "$manifest"
+    invocation=$(field "$h" plugin_invocation)
+    [[ -n $invocation ]] || invocation=$(field "$h" invocation)
+    # shellcheck disable=SC2016 # Markdown backticks, not shell substitutions.
+    printf '# bp3 yap skills (%s)\n\nGenerated package; do not hand-edit.\n\nInvoke skills with `%s`.\n' "$h" "$invocation" > "$base/README.md"
+    find "$base" -type f | LC_ALL=C sort
+  done
+}
+scaffold() {
+  valid_id "$skill_id" || die "invalid skill id: $skill_id"
+  [[ ! -e $root/skills/$skill_id ]] || die "skill already exists: $skill_id"
+  local dest="$root/skills/$skill_id/SKILL.md" quoted
+  quoted=$(jq -Rn --arg text "${description:-TODO: one sentence stating the job this skill does.}" '$text')
+  mkdir -p "$(dirname "$dest")"
+  { printf -- '---\nname: %s\ndescription: %s\n---\n\n' "$skill_id" "$quoted"; cat "$root/templates/skill.md"; } > "$dest"
+  printf '%s\n' "$dest"
+}
+dispatch() {
+  case "$command" in
+    check) check_sources ;;
+    list)
+      if [[ $json == true ]]; then
+        jq -n --argjson skills "$(active_ids | jq -Rsc 'split("\n") | map(select(length > 0))')" --slurpfile harnesses "$root/harnesses.json" '{skills:$skills,harnesses:$harnesses[0]}'
+      else active_ids; fi ;;
+    new) scaffold ;;
+    render|plugin|install)
+      check_sources >&2
+      case "$command" in render) render ;; plugin) plugin ;; install) install_selected ;; esac ;;
+    *) die "unknown command: $command" ;;
+  esac
+}
+# Capture output without putting dispatch in a conditional/substitution, which
+# would disable Bash errexit inside its functions.
+if [[ $json == true && $command != list ]]; then
+  dispatch > "$work/output"
+  if [[ $command == check ]]; then printf '[]\n'
+  else jq -Rsc 'split("\n") | map(select(length > 0))' "$work/output"; fi
+else
+  dispatch
+fi

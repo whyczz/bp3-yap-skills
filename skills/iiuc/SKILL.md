@@ -1,5 +1,5 @@
 ---
-name: {{ skill_id }}
+name: iiuc
 description: "Turn a raw voice transcript or messy dictated text into a clean statement of intent, played back as IIUC for confirmation before anything is executed."
 ---
 
@@ -8,7 +8,7 @@ description: "Turn a raw voice transcript or messy dictated text into a clean st
 Use when the user's message is a voice transcript or rough dictated text:
 run-on, unpunctuated, full of fillers or false starts, with mangled
 technical terms, or with several requests in one breath. Also use
-whenever the user invokes `{{ invocation }}`, and as a sync check before
+whenever explicitly invoked, and as a sync check before
 acting on any request whose meaning could reasonably be read two ways.
 If the message is already clean and precise, say so in one line and
 return it unchanged.

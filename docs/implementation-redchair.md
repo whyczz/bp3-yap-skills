@@ -1,7 +1,9 @@
 # Implementation red chair: templating, scaffolder, linter
 
-Status: decided for v1. This document records the adversarial pass over the
-implementation approach before the toolchain hardens.
+Status: historical, superseded by the static-Markdown/Bash refactor.
+The current implementation and commands are documented in README.md.
+This record describes the former OCaml/template-based implementation;
+its language and templating decisions are no longer in effect.
 
 ## Proposal under attack
 
@@ -83,7 +85,7 @@ quietly skipped at commit time.
 
 ### 7. Hand-edits to installed skills get clobbered
 
-Verdict: the installer records SHA-256 hashes in a lock file beside the
+Verdict: the installer records MD5 content fingerprints in a lock file beside the
 installed skills. An existing destination whose hash differs from the lock
 is refused unless `--force` is explicit. First install over a foreign file
 of the same name is also refused.

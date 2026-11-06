@@ -1,3 +1,0 @@
-(library
- (name yap_lib)
- (libraries cmdliner yojson unix))

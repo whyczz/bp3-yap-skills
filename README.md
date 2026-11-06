@@ -1,182 +1,211 @@
 # bp3-yap-skills
 
 Human-invoked design skills for coding agents. A person invokes a skill by
-name to design something or to get one specified output shape from the LLM.
+name to get one specified kind of thinking or output from the LLM.
 The human is the operator and the check.
 
-Yap skills are portable Markdown. They hold no state, install no hooks, and
-ship no harness extensions. Anything that needs Board state, tool blocking,
-or runtime code belongs in bp3 control or worker.
+Skills are **static, portable Markdown**. They hold no state, install no
+hooks, and ship no harness extensions. Anything that needs Board state,
+tool blocking, or runtime code belongs in bp3 control or worker.
 
-## Status
+## Skills
 
-Version 0.1.0 contains the authoring toolchain and one implemented skill:
+| Skill | Job |
+|---|---|
+| `iiuc` | Messy input to TL;DR and IIUC playback, then stop |
+| `ask` | Interview until a buildable request is clear |
+| `search` | Search repo, history, web, archive; report with sources |
+| `red-chair` | Read-only adversarial pass with next steps |
+| `teach` | First-principles explanation grounded in the repo |
+| `dossier` | Deep-dive learning document; explores, never decides |
+| `design` | Proposed design: context, data models, functions, storage, milestones |
+| `swipe` | External-repo adoption report with citations |
+| `tldr` | Read-only primer over a diff for a human reviewer |
+| `debug` | Root cause proven before any fix |
+| `verify` | Fresh checks and exact outputs before "done" |
+| `commit` | Commit message: TL;DR, For humans, For LLMs |
+| `add-skill` | Gatekeeper for adding the next skill |
 
-| Skill | Job | Status |
-|---|---|---|
-| `iiuc` | Messy input to TL;DR and IIUC playback, then stop | implemented |
-| `ask` | Interview until a buildable request is clear | implemented |
-| `search` | Search repo, history, web, archive; report with sources | implemented |
-| `red-chair` | Read-only adversarial pass with next steps | implemented |
-| `teach` | First-principles explanation grounded in the repo | implemented |
-| `dossier` | Deep-dive learning document; explores, never decides | implemented |
-| `design` | Proposed design: context, data models, functions, storage, milestones | implemented |
-| `swipe` | External-repo adoption report with citations | implemented |
-| `tldr` | Read-only primer over a diff for a human reviewer | implemented |
-| `debug` | Root cause proven before any fix | implemented |
-| `verify` | Fresh checks and exact outputs before "done" | implemented |
-| `commit` | Commit message: TL;DR, For humans, For LLMs | implemented |
-| `add-skill` | Gatekeeper for adding the next skill | implemented |
+A new skill enters through the `add-skill` gates; scaffolding alone is not approval.
 
-The full designed roster from bp3-docs is implemented above. The next
-skill enters only through the `add-skill` gates; a roster entry in a
-design doc is not an implementation.
+## Setup
+
+Requirements: Bash 3.2+, **Mike Farah's Go-based yq v4**, and jq.
+Development checks additionally use ShellCheck. No OCaml, opam, dune,
+Ruby, Python, or template engine is required. Installed skills have no
+runtime dependency on these authoring tools.
+
+On macOS, install the dependencies from the committed `Brewfile`:
+
+```sh
+brew bundle
+# Or: brew install yq jq shellcheck
+make check
+```
+
+On other Unix systems, install those same tools using your package manager.
+The Python-based tool also named `yq` is not compatible; the CLI checks
+that Mike Farah yq v4 is present. Standard Unix utilities including `find`,
+`awk`, `mktemp`, and `md5` (macOS) or `md5sum` (Linux) are also used.
 
 ## Layout
 
 ```text
-skills/<skill-id>/SKILL.md.j2   authored source, one directory per skill
-templates/skill/SKILL.md.j2     scaffolder template
-harnesses.json                  harness paths and invocation spellings
-retired-skills.json             retired ids, replacement (or null), and reason
-lib/, bin/                      OCaml renderer, linter, scaffolder, installer
-tests/                          tooling tests
-generated/                      render output (not committed)
+skills/<id>/SKILL.md    canonical authored content, not generated
+scripts/yap            Bash CLI: check, render, plugin, install, new, list
+scripts/common.sh      validation and packaging helpers; yq parses YAML
+scripts/install.sh     managed installer and retirement safeguards
+templates/skill.md     static scaffold body
+harnesses.json         harness install paths and invocation metadata
+retired-skills.json    explicit retirements and replacement/reason metadata
+Brewfile               runtime and development dependencies
+test/                  shell integration tests and optional Pi discovery test
+generated/             derived packaging output (not committed)
 ```
 
-## Use
-
-Requirements: OCaml 5.1+, opam, and dune. Build once with `opam install . --deps-only` (or use an existing switch with cmdliner and yojson), then `dune build`. Installed skills are plain Markdown with no runtime dependency.
+## Check and author
 
 ```sh
-make check                        # build + dune render check + tests
-dune build @render                # canonical check: lint and render every harness
-dune exec yap -- render --root . --harness pi
-dune exec yap -- install --root . --harness pi -p --target /path/to/project
-dune exec yap -- install --root . --harness pi -g
-dune exec yap -- new <skill-id> --description "<one sentence>"
-./scripts/install-hooks.sh        # enable the committed pre-commit gate
-make install                      # dune install: put the yap binary in the switch
-make install-skills               # install skills: [harness|all] [global|local-dir]
-                                  #   make install-skills pi global
-                                  #   make install-skills all        (all harnesses, global)
-                                  #   make install-skills pi local-dir DIR=/path/to/project
+make check                       # ShellCheck + content checks + integration tests
+make test                        # integration tests only
+./scripts/yap check              # validate canonical sources
+./scripts/yap check --json       # [] on success; errors go to stderr, exit nonzero
+./scripts/yap list --json
+./scripts/yap new <id> --description "One sentence stating the job."
+./scripts/install-hooks.sh       # opt into the committed make-check pre-commit gate
 ```
 
-Harness selection, for `render` and `install`, is a CLI input only:
-`--harness` flags (comma-separated or repeated, for example
-`--harness pi,codex,claude`), defaulting to pi alone. No environment
-variable selects harnesses. `render --all` ignores `--harness`.
-Selecting two
-harnesses that share one skills root in the chosen scope (Codex and Muse
-in `.agents/skills`) is refused before anything is written.
+The checker uses yq to parse actual YAML, including quoted and multiline
+values. It requires a mapping with nonempty string `name` and `description`,
+rejects duplicate YAML keys, and checks that `name` matches the directory.
+It also checks valid skill IDs (including reserved-name rejection), exactly
+one `SKILL.md` per skill, no TODO scaffold or template markers, a 500-line
+ceiling, README roster consistency, and retirement registry validity.
 
-Plugin bundles: `dune exec yap -- plugin --root . --harness pi,claude,codex,muse`
-writes `generated/plugin/<harness>/bp3/`. Claude and Codex namespace the
-skills as `bp3:<skill>` (`/bp3:iiuc` on Claude, `$bp3:iiuc` on Codex).
-Muse installs the same bundle as a native plugin (skill ids
-`plugin:bp3:<skill>`). Pi has no plugin namespace, so it ships a pi
-package: skills stay `/skill:<name>` and generated prompts give
-`/<name>`. Only harnesses with a real plugin or package system get a
-bundle; the bundle is a distribution wrapper, not a new source.
+There are **no substitutions or harness conditionals in skill content**.
+Write `name: iiuc` directly. Trigger prose says when to invoke the skill,
+not which harness-specific command spells its name. Scaffolding writes
+TODOs that intentionally fail checks until the skill is authored.
 
-Rendered output is plain Markdown under `generated/<harness>/`: a portable
-`SKILL.md` per skill, plus, for pi only, a prompt template at
-`.pi/prompts/<skill>.md`. That template is what gives pi the exact
-`/<skill>` command (for example `/iiuc`); the skill itself remains
-available as `/skill:<skill>`.
+## Package
 
-Install scope is explicit and mutually exclusive: `-p`/`--project` or
-`-g`/`--global`. Per project, pi writes `<project>/.pi/skills/<id>/SKILL.md`
-and `<project>/.pi/prompts/<id>.md`. Global pi writes
-`~/.pi/agent/skills/<id>/SKILL.md` and `~/.pi/agent/prompts/<id>.md`
-(or under `$PI_CODING_AGENT_DIR`). Other harnesses take their conventional
-global bases (`~/.claude`, `~/.agents`, `~/.config/muse`). Installs record scope, harness,
-and content hashes in `yap-skills.lock.json` beside the skills,
-and refuse to overwrite a file they did not install unless `--force` is
-given. Global yap skills are the default way the CEO gets `/iiuc`
-everywhere; per-project installs pin or override a version for one repo,
-and the installer refuses to layer a second harness variant into a root
-already managed for another harness.
+```sh
+make render                      # copy static skills into all harness layouts
+./scripts/yap render --harness pi
+make package                     # plugin/package bundles for every harness
+./scripts/yap plugin --harness pi,claude,codex,muse
+```
 
-## Duplicate discovery in Pi
+`render` and `plugin` copy each `SKILL.md` byte-for-byte. `render` defaults
+to `generated/<harness>/`; `plugin` defaults to
+`generated/plugin/<harness>/bp3/`. Both accept `--out DIR` and validate
+sources before writing. Output directories are not automatically pruned;
+use a fresh output directory when producing a release after a retirement.
+Never edit generated output.
 
-Pi discovers both its own skills and Agent Skills directories (`~/.agents/skills`
-and project `.agents/skills`). Installing Pi and Codex variants therefore used
-to produce duplicate-name warnings. Pi installs now merge one exclusion per
-active yap skill into the scope's `settings.json`, for example:
+Only packaging metadata is generated:
+
+- Pi prompt wrappers provide exact `/<id>` commands and forward
+  `${ARGUMENTS:-}`. Skills themselves remain available as `/skill:<id>`.
+- Pi packages have a `package.json` declaring skills and prompts.
+- Claude, Codex, and Muse bundles have native plugin manifests.
+  Claude and Codex namespace invocation as `/bp3:<id>` and `$bp3:<id>`;
+  Muse uses native plugin skill IDs. The skill body stays unchanged.
+
+Harness selection is a CLI input: `--harness` accepts comma-separated or
+repeated values, defaulting to Pi. No environment variable selects
+harnesses. `render --all` selects every harness. `--root DIR` selects a
+source repository; by default the scripts use their own checkout.
+`--json` returns file-path arrays for packaging and installation.
+
+## Install
+
+```sh
+./scripts/yap install --harness pi -g
+./scripts/yap install --harness pi -p --target /path/to/project
+./scripts/yap install --harness pi -g --dry-run
+make install-skills pi global
+make install-skills pi local-dir DIR=/path/to/project
+make install-skills all           # all harnesses, using their global bases
+```
+
+Scope is explicit and mutually exclusive: `-p`/`--project` requires
+`--target DIR`; `-g`/`--global` defaults to the harness's global base.
+For a single global harness, `--target DIR` overrides that base.
+
+| Harness | Project skills | Global base |
+|---|---|---|
+| Pi | `.pi/skills` | `$PI_CODING_AGENT_DIR` or `~/.pi/agent` |
+| Claude | `.claude/skills` | `~/.claude` |
+| Codex | `.agents/skills` | `~/.agents` |
+| Muse | `.agents/skills` | `$XDG_CONFIG_HOME/muse` or `~/.config/muse` |
+
+Global skills live under `skills/` in each base. Pi also installs prompt
+wrappers under `.pi/prompts` (project) or `prompts/` (global).
+
+Installs maintain `yap-skills.lock.json` beside the skills. Existing files
+are overwritten only if their content fingerprint matches the recorded
+ownership, unless `--force` is explicit. Symlinked write paths are refused,
+even with force. Lock fingerprints retain the original tool's **MD5**
+format for compatibility; they detect local edits, not malicious tampering.
+Existing OCaml-era locks can be used without reinstalling with force.
+Corrupt locks/settings fail closed. All selected harnesses are preflighted
+before any installation writes or retirement deletions, although installs
+are not transactional against I/O failures or concurrent writers.
+
+Two harnesses sharing a skills root in the selected scope (Codex and Muse
+in a project) are refused before writing. An already managed root cannot
+switch harness or scope without `--force`.
+
+### Pi discovery settings
+
+Pi also discovers `.agents/skills`. To prefer Pi's copy without deleting
+Codex/Muse files, the installer merges one exclusion per active skill into
+the scope's `settings.json`, for example:
 
 ```json
 {"skills": ["!**/.agents/skills/ask/SKILL.md"]}
 ```
 
-This selects the Pi render without deleting Codex/Muse files or hiding unrelated
-skills. Existing preferences and resource entries are preserved; repeated installs
-do not duplicate the generated entries. Exclusions are additive, not automatically
-removed. Pi packages alone do not perform this installer configuration.
+Other settings and existing resource entries survive; repeated installs
+are idempotent. Exclusions are additive, not automatically removed. Pi
+packages alone do not perform this installer configuration.
 
-Pi applies these exclusions **per scope**: user settings exclude user-discovered
-copies, and project settings exclude project-discovered copies. A global install
-does not change arbitrary projects. If an old project `.agents/skills/iiuc` shadows
-your global Pi skill, add `!**/.agents/skills/iiuc/SKILL.md` to that project's
-`.pi/settings.json` `skills` list. This preserves the old file while preferring the
-Pi variant. Explicit `+path` entries can override glob exclusions. Intentional
-project/global Pi overrides may still generate collision warnings.
+Exclusions apply **per scope**. A global install does not modify arbitrary
+projects. An old project `.agents/skills/iiuc` needs the exclusion in that
+project's `.pi/settings.json`. Explicit `+path` entries can override glob
+exclusions; intentional project/global Pi overrides may still warn.
 
-## Retiring or renaming a skill
+### Retirements
 
-Deleting a source alone does **not** authorize deletion of installed files.
-Record the retirement in `retired-skills.json`; keep the entry permanently so
-users upgrading from older versions get cleanup too:
+Deleting a source does **not** authorize deleting installed files. Record
+retired IDs permanently in `retired-skills.json`:
 
 ```json
-{
-  "commit-fmt": {
-    "replacement": "commit",
-    "reason": "Renamed to commit."
-  }
-}
+{"commit-fmt": {"replacement": "commit", "reason": "Renamed to commit."}}
 ```
 
-Use `null` for `replacement` when there is no successor. Retired ids cannot
-remain active, replacements must be active, and every retirement needs a reason.
-`yap check` validates this registry.
+`replacement` may be null. Retired IDs cannot remain active; replacements
+must exist, and reasons must be nonempty. On install, only files owned by
+the same harness/scope and still matching the lock are removed. Modified,
+foreign, or symlinked retired files survive **even with `--force`**.
+Only empty skill directories are removed; unrelated assets survive.
+Removals enter the lock's append-only history. Missing files simply leave
+the inventory. `--dry-run` previews paths on stdout and retirement decisions
+on stderr without changing files, settings, or locks.
 
-On the next install for each harness/scope, the installer removes the retired
-`SKILL.md` and corresponding Pi prompt only if the existing lock records ownership
-for that harness and scope **and** the current content hash matches. Modified,
-untracked, or symlinked files are preserved and reported, even with `--force`.
-Only empty skill directories are removed; unrelated files survive. Successful
-removals move out of the lock's `files` inventory into its append-only `removals`
-history (key, path, content hash, toolchain version, and removal time). Missing
-files simply leave the inventory. Corrupt locks fail closed.
+## Verification and migration
 
-Preview before applying:
-
-```sh
-dune exec yap -- install --root . --harness pi -g --dry-run
-dune exec yap -- install --root . --harness pi -g
-```
-
-`--dry-run` previews writes on stdout and retirement decisions on stderr; it
-changes neither installed files nor settings/locks. Install each harness to clean
-its own files. There is no recursive deletion or general untracked-file pruning.
-
-The regular gate is `make check`. To also exercise the installed Pi discovery
-implementation with temporary user/project directories:
+`make check` is the regular gate. The optional test against an installed
+Pi uses isolated user/project directories:
 
 ```sh
 PI_PACKAGE_ROOT=/path/to/@earendil-works/pi-coding-agent node test/pi-discovery.mjs
 ```
 
-## Authoring rules
-
-- One job per skill, stated in one sentence in the frontmatter description.
-- Templates use a deliberately tiny Jinja-shaped engine in `lib/template.ml`: variables (`skill_id`, `version`, `invocation`, `harness.id`, `harness.display`) and `if ==` / `if !=` conditionals only. No filters, macros, or loops. Logic that changes a skill's behavior per harness needs a test naming the difference.
-- Rendered files are derived. Never hand-edit `generated/`.
-- A new skill starts with `yap new`, but scaffolding is not approval. The
-  add-skill gates (prior-art search, red chair, adversarial trigger tests,
-  and optional Archive evidence) decide whether it stays.
-
-The implementation red chair and locked v1 decisions are in
-[docs/implementation-redchair.md](docs/implementation-redchair.md).
+This refactor replaces `dune exec yap -- ...` with `./scripts/yap ...`.
+`make install` now aliases skill installation; there is no compiled CLI to
+install. The former `*.j2` files are now canonical `SKILL.md` files.
+Harness discovery history is in [docs/harness-tests.md](docs/harness-tests.md).
+The earlier implementation decision record is historical and superseded
+by this static-Markdown/Bash toolchain.

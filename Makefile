@@ -1,55 +1,40 @@
-.PHONY: build check test fmt hooks install install-skills
+.PHONY: check test lint package render hooks install install-skills
 
-build:
-	dune build
+check: lint
+	./scripts/yap check
+	./test/test_yap.sh
 
-check: build
-	dune build @render
-	dune test
+lint:
+	shellcheck -x scripts/yap scripts/*.sh test/*.sh .githooks/pre-commit
 
 test:
-	dune test
+	./test/test_yap.sh
 
-fmt:
-	dune fmt
+render:
+	./scripts/yap render --all
+
+package:
+	./scripts/yap plugin --harness pi,claude,codex,muse
 
 hooks:
 	./scripts/install-hooks.sh
 
-install:
-	dune install
+# Compatibility: make install installs skills, not a compiled authoring binary.
+install: install-skills
 
-# Usage:
-#   make install-skills
-#   make install-skills pi global
-#   make install-skills all
-#   make install-skills all global
-#   make install-skills codex global
-#   make install-skills pi local-dir DIR=/path/to/project
-#   make install-skills claude local-dir DIR=/path/to/project
-#
-# The words after install-skills are captured as arguments, not targets:
-# first the harness (default pi), then the scope (global, or local-dir
-# which needs DIR). Anything else is passed to the yap CLI, which rejects
-# unknown harnesses and scopes we do not recognise here.
+# make install-skills [pi|claude|codex|muse|all] [global|local-dir] [DIR=...]
 install-skills:
 	@harness='$(or $(word 2,$(MAKECMDGOALS)),pi)'; scope='$(or $(word 3,$(MAKECMDGOALS)),global)'; \
 	case "$$harness" in global|local|local-dir|project) scope="$$harness"; harness=pi ;; esac; \
-	harness_arg="$$harness"; \
-	if [ "$$harness" = "all" ]; then harness_arg="pi,claude,codex,muse"; fi; \
+	if [ "$$harness" = all ]; then harness=pi,claude,codex,muse; fi; \
 	case "$$scope" in \
-	  global) \
-	    dune exec yap -- install --root . --harness "$$harness_arg" -g ;; \
+	  global) ./scripts/yap install --harness "$$harness" -g ;; \
 	  local|local-dir|project) \
-	    if [ -z "$(DIR)" ]; then \
-	      echo "usage: make install-skills $$harness local-dir DIR=/path/to/project" >&2; exit 2; \
-	    fi; \
-	    dune exec yap -- install --root . --harness "$$harness_arg" -p --target "$(DIR)" ;; \
-	  *) echo "unknown scope: $$scope (expected global or local-dir)" >&2; exit 2 ;; \
+	    if [ -z "$(DIR)" ]; then echo 'local-dir requires DIR=/path/to/project' >&2; exit 2; fi; \
+	    ./scripts/yap install --harness "$$harness" -p --target "$(DIR)" ;; \
+	  *) echo "unknown scope: $$scope" >&2; exit 2 ;; \
 	esac
 
-# Swallow the argument words after install-skills so Make does not try
-# to build them as targets.
 EXTRA_GOALS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
 ifneq (,$(filter install-skills,$(MAKECMDGOALS)))
 .PHONY: $(EXTRA_GOALS)

@@ -1,11 +1,11 @@
 ---
-name: {{ skill_id }}
+name: tldr
 description: "Produce a read-only primer over a diff or change: shape, features, dogfood cases, and where a reviewer should look hardest."
 ---
 
 # TLDR
 
-Use when the user invokes `{{ invocation }}`, asks for a TL;DR of a
+Use when the user explicitly invokes this skill, asks for a TL;DR of a
 change, or is about to review work they did not write. Read-only: this
 skill orients a human reviewer; it does not approve, land, or fix.
 

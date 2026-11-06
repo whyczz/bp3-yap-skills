@@ -1,11 +1,11 @@
 ---
-name: {{ skill_id }}
+name: dossier
 description: "Build a deep-dive dossier on a problem space: map, forces, options, diagrams, and ranked open questions, without deciding."
 ---
 
 # Dossier
 
-Use when the user invokes `{{ invocation }}` or wants to understand a
+Use when the user explicitly invokes this skill or wants to understand a
 problem space before committing: how something works, what the options
 are, what a migration would touch. A dossier explores. It never decides,
 requests sign-off, or lands anything; its output feeds `ask`, a Quest,

@@ -1,11 +1,11 @@
 ---
-name: {{ skill_id }}
+name: ask
 description: "Interview the user until a request is clear enough to build, recommending an answer for every question asked."
 ---
 
 # Ask
 
-Use when the user invokes `{{ invocation }}`, asks to be interviewed or
+Use when the user explicitly invokes this skill, asks to be interviewed or
 grilled, or brings a request whose goal, user, scope, or success test is
 unclear. Do not use for a clear small change the user has already
 specified; build that instead.

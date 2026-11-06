@@ -1,11 +1,11 @@
 ---
-name: {{ skill_id }}
+name: red-chair
 description: "Run a read-only adversarial review of a plan, design, change, or repo slice and return evidence-backed findings with next steps."
 ---
 
 # Red chair
 
-Use when the user invokes `{{ invocation }}`, asks for a red chair,
+Use when the user explicitly invokes this skill, asks for a red chair,
 devil's-advocate, premortem, or adversarial pass, or before a costly or
 hard-to-reverse decision. This skill never edits the thing it attacks.
 

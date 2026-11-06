@@ -1,5 +1,10 @@
 # Harness tests
 
+Historical load tests below predate the static-Markdown refactor. They
+establish the harness paths and bundle layouts, not fresh proof of the new
+Bash implementation. Current checks use `make check` and the optional
+`test/pi-discovery.mjs`; source skill content is now copied unchanged.
+
 Battle-test record for rendered and installed yap skills. A harness is
 marked `tested` in harnesses.json only when a real harness binary has
 discovered the installed skill, not when a file merely exists.
