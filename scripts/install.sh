@@ -46,6 +46,48 @@ settings_plan() {
     .skills = ($existing + [$ids[] | "!**/.agents/skills/" + . + "/SKILL.md" | select(. as $p | $existing | index($p) | not)])
   ' <<< "$existing" || die "invalid settings: $path"
 }
+voice_plan() {
+  local h=$1 base=$2 output=$3 filename voice_base=$2
+  voice_path=''
+  [[ $voice == true && -f $root/skills/anon-writer/SKILL.md ]] || return 0
+  filename=$(field "$h" instructions_file)
+  case "$filename" in AGENTS.md|CLAUDE.md) ;; *) die "missing or invalid instructions_file for $h" ;; esac
+  # Codex's global skills and global instructions have different native homes.
+  if [[ $h == codex && $scope == global && -z $target ]]; then
+    voice_base=${CODEX_HOME:-$HOME/.codex}
+    [[ $voice_base == /* ]] || voice_base="$PWD/$voice_base"
+  fi
+  voice_path="${voice_base%/}/$filename"
+  no_symlink "$voice_path" "$voice_base" || die "refusing symlinked instructions: $voice_path"
+  [[ ! -e $voice_path || -f $voice_path ]] || die "not a regular instructions file: $voice_path"
+  local input=/dev/null
+  [[ ! -e $voice_path ]] || input=$voice_path
+  # jq's raw strings preserve every byte outside our markers, including a
+  # missing final newline. Fail closed on partial, duplicate or inline markers.
+  frontmatter "$root/skills/anon-writer/SKILL.md" > "$work/voice-metadata.json"
+  jq -j --rawfile original "$input" '
+    (.body | sub("^\\s+"; "") | sub("\\s+$"; "")) as $guide |
+    if ($guide | test("\\S") | not) then error("missing default voice guide") else . end |
+    "<!-- bp3-yap:voice:begin -->" as $begin |
+    "<!-- bp3-yap:voice:end -->" as $end |
+    ($begin + "\n## Yap communication voice\n\nDefault communication voice: apply the full guide below to replies unless the user requests another tone.\n\n" + $guide +
+      "\n\nThis block is managed by yap install.\n" + $end) as $block |
+    ($original | split($begin)) as $parts |
+    ($original | split($end)) as $ends |
+    if $original == "" or (($parts | length) == 1 and ($ends | length) == 1) then
+      $original + (if $original == "" or ($original | endswith("\n")) then "" else "\n" end) + $block + "\n"
+    elif ($parts | length) == 2 and ($ends | length) == 2 then
+      ($parts[1] | split($end)) as $tail |
+      if ($tail | length) != 2 or
+         ($parts[0] != "" and ($parts[0] | endswith("\n") | not)) or
+         ($tail[0] | startswith("\n") | not) or
+         ($tail[0] | endswith("\n") | not) or
+         ($tail[1] != "" and ($tail[1] | startswith("\n") | not)) then
+        error("malformed voice markers")
+      else $parts[0] + $block + $tail[1] end
+    else error("duplicate or incomplete voice markers") end
+  ' "$work/voice-metadata.json" > "$output" || die "cannot update voice instructions: $voice_path"
+}
 retire_one() {
   local key=$1 dest=$2 base=$3 owned=$4 recorded
   recorded=$(jq -r --arg key "$key" '.files[$key] // empty' <<< "$lock")
@@ -66,6 +108,7 @@ retire_one() {
 }
 install_one() {
   local h=$1 base=$2 apply=$3 lock_path lock_h lock_scope owned=false source id key dest settings='' settings_path='' ids
+  local voice_path='' voice_output="$work/voice-$1.md"
   install_roots "$h" "$base"
   lock_path="$skills_root/yap-skills.lock.json"
   no_symlink "$lock_path" "$base" || die "refusing symlinked lock path: $lock_path"
@@ -90,6 +133,7 @@ install_one() {
     ids=$(active_ids | jq -Rsc 'split("\n") | map(select(length > 0))')
     settings=$(settings_plan "$settings_path" "$ids")
   fi
+  voice_plan "$h" "$base" "$voice_output"
   [[ $apply == true ]] || return 0
   if [[ -f $root/retired-skills.json ]]; then
     while IFS= read -r id; do
@@ -121,6 +165,16 @@ install_one() {
       printf '%s\n' "$settings" > "$settings_path"
     fi
     printf '%s\n' "$settings_path"
+  fi
+  if [[ -n $voice_path ]]; then
+    if [[ $dry_run == false ]]; then
+      mkdir -p "$(dirname "$voice_path")"
+      cp "$voice_output" "$voice_path"
+    fi
+    printf '%s\n' "$voice_path"
+    if [[ -e $(dirname "$voice_path")/AGENTS.override.md && $h != claude ]]; then
+      printf 'warning: AGENTS.override.md may shadow voice instructions: %s\n' "$voice_path" >&2
+    fi
   fi
   if [[ $dry_run == false ]]; then
     mkdir -p "$skills_root"

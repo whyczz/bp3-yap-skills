@@ -16,6 +16,7 @@ usage() {
     '  -g [--target DIR]   Install globally (optional harness base)' \
     '  --force             Replace modified active files, never force deletion' \
     '  --dry-run           Preview installation without changing target files' \
+    '  --no-voice          Install skills without updating default voice instructions' \
     '  --json              Machine-readable output' \
     '  new ID --description TEXT   Scaffold; TODOs must be completed'
 }
@@ -24,7 +25,7 @@ command=$1; shift
 case "$command" in --help|-h|help) usage; exit 0 ;; esac
 root=$(dirname "$script_dir")
 harness_flags='' out='' scope='' target='' description='' skill_id=''
-force=false dry_run=false all=false json=false
+force=false dry_run=false all=false json=false voice=true
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --help|-h) usage; exit 0 ;;
@@ -44,6 +45,7 @@ while [[ $# -gt 0 ]]; do
       shift ;;
     --force) force=true; shift ;;
     --dry-run) dry_run=true; shift ;;
+    --no-voice) voice=false; shift ;;
     --all) all=true; shift ;;
     --json) json=true; shift ;;
     -*) die "unknown option: $1" ;;

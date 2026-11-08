@@ -2,7 +2,8 @@
 
 Human-invoked design skills for coding agents. A person invokes a skill by
 name to get one specified kind of thinking or output from the LLM.
-The human is the operator and the check.
+The human is the operator and the check. `anon-writer` is also the default
+communication voice, with its full guide installed in a managed instruction block.
 
 Skills are **static, portable Markdown**. They hold no state, install no
 hooks, and ship no harness extensions. Anything that needs Board state,
@@ -12,6 +13,7 @@ tool blocking, or runtime code belongs in bp3 control or worker.
 
 | Skill | Job |
 |---|---|
+| `anon-writer` | Explicit house-voice replies and rewrites; default communication voice |
 | `iiuc` | Messy input to TL;DR and IIUC playback, then stop |
 | `ask` | Interview until a buildable request is clear |
 | `search` | Search repo, history, web, archive; report with sources |
@@ -142,6 +144,40 @@ For a single global harness, `--target DIR` overrides that base.
 
 Global skills live under `skills/` in each base. Pi also installs prompt
 wrappers under `.pi/prompts` (project) or `prompts/` (global).
+
+### Default communication voice
+
+`anon-writer` is available explicitly (Pi `/skill:anon-writer` or
+`/anon-writer`; other harnesses use their normal skill invocation). Installs
+also embed its full guide in native agent instructions as the default for
+communication—no skill invocation needed. The source of truth is the Markdown
+body of `skills/anon-writer/SKILL.md`; YAML frontmatter is not included.
+Reinstalling updates the embedded guide, including existing summary-only blocks.
+
+| Harness | Project instructions | Global instructions |
+|---|---|---|
+| Pi | `AGENTS.md` | `<global base>/AGENTS.md` |
+| Claude | `CLAUDE.md` | `<global base>/CLAUDE.md` |
+| Codex | `AGENTS.md` | `$CODEX_HOME/AGENTS.md` or `~/.codex/AGENTS.md` |
+| Muse | `AGENTS.md` | `<global base>/AGENTS.md` |
+
+An explicit global `--target DIR` places instructions in that directory,
+including for Codex; use it as a staging/profile target, not as a change to
+Codex's native instruction lookup. All project paths are relative to
+`--target`. The installer updates only the
+`<!-- bp3-yap:voice:begin -->` / `<!-- bp3-yap:voice:end -->` block,
+preserving content outside it. Malformed/duplicate markers and symlinked
+instruction paths fail before any writes, even with `--force`. Changes
+inside the block are replaced on reinstall; put personal overrides outside
+it. `--dry-run` includes the instruction path without writing it.
+
+Use `--no-voice` to install skills without changing instruction files; it
+leaves any existing voice block in place. Render/plugin packages alone do
+not activate the default voice. Native precedence still applies:
+`AGENTS.override.md` can shadow `AGENTS.md` (the installer warns, but does
+not edit overrides). Explicit tone requests and required output formats win;
+IIUC stays plain, machine-readable output stays valid, and successful
+verification stays one line. Humor is seasoning, not extra token tax.
 
 Installs maintain `yap-skills.lock.json` beside the skills. Existing files
 are overwritten only if their content fingerprint matches the recorded

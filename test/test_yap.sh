@@ -274,4 +274,123 @@ printf 'foreign\n' > "$work/multi-conflict/.claude/skills/demo/SKILL.md"
 rejects "$yap" install --root "$root" -p --target "$work/multi-conflict" --harness pi,claude
 assert test ! -e "$work/multi-conflict/.pi"
 
+# House voice is both explicitly installed and merged into native instructions.
+fixture
+mkdir -p "$root/skills/anon-writer"
+cp "$repo/skills/anon-writer/SKILL.md" "$root/skills/anon-writer/"
+printf '| `anon-writer` | House voice |\n' >> "$root/README.md"
+for h in pi claude codex muse; do
+  for flag in -g -p; do
+    target="$work/voice-$h-$flag"
+    filename=AGENTS.md; [[ $h != claude ]] || filename=CLAUDE.md
+    mkdir -p "$target"
+    printf 'Keep this foreign instruction (no final newline).' > "$target/$filename"
+    "$yap" install --root "$root" "$flag" --target "$target" --harness "$h" --json > "$work/voice-paths.json"
+    assert jq -e --arg path "$target/$filename" 'index($path) != null' "$work/voice-paths.json"
+    assert grep -Fq 'Default communication voice:' "$target/$filename"
+    assert jq -ne --rawfile installed "$target/$filename" --rawfile source "$root/skills/anon-writer/SKILL.md" '
+      ($source | split("---\n") | .[2:] | join("---\n") | sub("^\\s+"; "") | sub("\\s+$"; "")) as $body |
+      ($installed | contains($body)) and ($installed | contains("disable-model-invocation:") | not)'
+    assert grep -Fq 'Keep this foreign instruction (no final newline).' "$target/$filename"
+    prefix=global_; [[ $flag != -p ]] || prefix=''
+    dir=$(jq -r --arg h "$h" --arg key "${prefix}skills_dir" '.[$h][$key]' "$root/harnesses.json")
+    assert cmp "$repo/skills/anon-writer/SKILL.md" "$target/$dir/anon-writer/SKILL.md"
+    printf '\nPersonal suffix without a final newline.' >> "$target/$filename"
+    cp "$target/$filename" "$work/voice-before"
+    "$yap" install --root "$root" "$flag" --target "$target" --harness "$h" > /dev/null
+    assert cmp "$work/voice-before" "$target/$filename"
+  done
+done
+
+# Reinstall migrates a legacy summary-only block to the full guide.
+target="$work/voice-pi--g"
+cp "$target/AGENTS.md" "$work/voice-before"
+jq -nj --rawfile text "$target/AGENTS.md" '
+  ($text | split("<!-- bp3-yap:voice:begin -->")) as $parts |
+  $parts[0] + "<!-- bp3-yap:voice:begin -->\n## Yap communication voice\n\nLegacy summary only.\n<!-- bp3-yap:voice:end -->" +
+  ($parts[1] | split("<!-- bp3-yap:voice:end -->")[1])
+' > "$work/voice-legacy"
+cp "$work/voice-legacy" "$target/AGENTS.md"
+"$yap" install --root "$root" -g --target "$target" > /dev/null
+assert cmp "$work/voice-before" "$target/AGENTS.md"
+
+# Updating the full guide replaces only the block; outside bytes survive exactly.
+printf '\nUpdated house voice.\n' >> "$root/skills/anon-writer/SKILL.md"
+target="$work/voice-pi--g"
+"$yap" install --root "$root" -g --target "$target" > /dev/null
+assert grep -Fq 'Updated house voice.' "$target/AGENTS.md"
+assert jq -ne --rawfile text "$target/AGENTS.md" '$text | startswith("Keep this foreign instruction (no final newline).\n<!-- bp3-yap:voice:begin -->\n") and endswith("<!-- bp3-yap:voice:end -->\n\nPersonal suffix without a final newline.")'
+
+# A managed block at EOF without a final newline is also updated in place.
+jq -njr --rawfile text "$target/AGENTS.md" '$text | split("<!-- bp3-yap:voice:end -->")[0] + "<!-- bp3-yap:voice:end -->"' > "$work/voice-no-newline"
+cp "$work/voice-no-newline" "$target/AGENTS.md"
+"$yap" install --root "$root" -g --target "$target" > /dev/null
+assert cmp "$work/voice-no-newline" "$target/AGENTS.md"
+# Distinct skills roots can safely share the same project instruction block.
+"$yap" install --root "$root" -p --target "$work/voice-shared" --harness pi,codex > /dev/null
+assert test "$(grep -Fc '<!-- bp3-yap:voice:begin -->' "$work/voice-shared/AGENTS.md")" = 1
+
+# Dry runs and opt-out never write instructions, including on a fresh target.
+"$yap" install --root "$root" -p --target "$work/voice-dry" --dry-run --json > "$work/voice-paths.json"
+assert jq -e --arg path "$work/voice-dry/AGENTS.md" 'index($path) != null' "$work/voice-paths.json"
+assert test ! -e "$work/voice-dry"
+"$yap" install --root "$root" -g --target "$target" --dry-run > /dev/null
+cp "$target/AGENTS.md" "$work/voice-before"
+"$yap" install --root "$root" -g --target "$target" --no-voice > /dev/null
+assert cmp "$work/voice-before" "$target/AGENTS.md"
+"$yap" install --root "$root" -p --target "$work/voice-optout" --no-voice > /dev/null
+assert test ! -e "$work/voice-optout/AGENTS.md"
+assert test -f "$work/voice-optout/.pi/skills/anon-writer/SKILL.md"
+
+# Native global roots, notably Codex's separate skill/instruction homes.
+for h in pi claude codex muse; do
+  home="$work/voice-home-$h"
+  HOME="$home" PI_CODING_AGENT_DIR="$home/pi-agent" CODEX_HOME="$home/codex-profile" XDG_CONFIG_HOME="$home/xdg" \
+    "$yap" install --root "$root" -g --harness "$h" > /dev/null
+  case "$h" in
+    pi) path="$home/pi-agent/AGENTS.md" ;;
+    claude) path="$home/.claude/CLAUDE.md" ;;
+    codex) path="$home/codex-profile/AGENTS.md" ;;
+    muse) path="$home/xdg/muse/AGENTS.md" ;;
+  esac
+  assert test -f "$path"
+done
+HOME="$work/voice-codex-default" CODEX_HOME='' "$yap" install --root "$root" -g --harness codex > /dev/null
+assert test -f "$work/voice-codex-default/.codex/AGENTS.md"
+assert test ! -e "$work/voice-codex-default/.agents/AGENTS.md"
+
+# Reject malformed ownership boundaries and symlinks before ANY writes.
+for markers in \
+  '<!-- bp3-yap:voice:begin -->' \
+  '<!-- bp3-yap:voice:end -->' \
+  '<!-- bp3-yap:voice:end -->\n<!-- bp3-yap:voice:begin -->' \
+  '<!-- bp3-yap:voice:begin -->\nx\n<!-- bp3-yap:voice:end -->\n<!-- bp3-yap:voice:begin -->\nx\n<!-- bp3-yap:voice:end -->' \
+  'inline <!-- bp3-yap:voice:begin -->\nx\n<!-- bp3-yap:voice:end -->' \
+  '<!-- bp3-yap:voice:begin -->\nx\n<!-- bp3-yap:voice:end -->inline'; do
+  target="$work/voice-malformed"
+  mkdir -p "$target"
+  printf '%b\n' "$markers" > "$target/AGENTS.md"
+  cp "$target/AGENTS.md" "$work/voice-before"
+  rejects "$yap" install --root "$root" -p --target "$target" --force
+  assert test ! -e "$target/.pi"
+  assert cmp "$work/voice-before" "$target/AGENTS.md"
+done
+target="$work/voice-symlink"
+mkdir -p "$target"
+printf 'Outside\n' > "$work/voice-outside"
+ln -s "$work/voice-outside" "$target/AGENTS.md"
+rejects "$yap" install --root "$root" -p --target "$target" --force
+assert test ! -e "$target/.pi"
+assert test "$(< "$work/voice-outside")" = Outside
+mkdir -p "$work/voice-multi-conflict"
+printf '<!-- bp3-yap:voice:begin -->\n' > "$work/voice-multi-conflict/CLAUDE.md"
+rejects "$yap" install --root "$root" -p --target "$work/voice-multi-conflict" --harness pi,claude
+assert test ! -e "$work/voice-multi-conflict/.pi"
+assert test ! -e "$work/voice-multi-conflict/AGENTS.md"
+
+# An empty guide also fails closed, before even creating a target.
+printf '%s\n' '---' 'name: anon-writer' 'description: House voice.' '---' '' > "$root/skills/anon-writer/SKILL.md"
+rejects "$yap" install --root "$root" -p --target "$work/voice-empty-guide"
+assert test ! -e "$work/voice-empty-guide"
+
 printf 'test_yap: ok (%s assertions)\n' "$checks"

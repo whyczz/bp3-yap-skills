@@ -1,6 +1,7 @@
 {
   "pi": {
     "display": "pi",
+    "instructions_file": "AGENTS.md",
     "skills_dir": ".pi/skills",
     "invocation": "/skill:{skill}",
     "command_invocation": "/{skill}",
@@ -11,6 +12,7 @@
   },
   "claude": {
     "display": "Claude",
+    "instructions_file": "CLAUDE.md",
     "skills_dir": ".claude/skills",
     "invocation": "/{skill}",
     "global_skills_dir": "skills",
@@ -20,6 +22,7 @@
   },
   "codex": {
     "display": "Codex",
+    "instructions_file": "AGENTS.md",
     "skills_dir": ".agents/skills",
     "invocation": "${skill}",
     "global_skills_dir": "skills",
@@ -29,6 +32,7 @@
   },
   "muse": {
     "display": "Muse",
+    "instructions_file": "AGENTS.md",
     "skills_dir": ".agents/skills",
     "invocation": "/{skill}",
     "global_skills_dir": "skills",

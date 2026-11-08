@@ -51,7 +51,19 @@ try {
     assert.ok(fs.existsSync(path.join(home, '.agents/skills', id, 'SKILL.md')), 'Codex copy must survive');
   }
   assert.ok(result.skills.some(skill => skill.name === 'unrelated'));
-  console.log(`pi-discovery: ok (${ids.length} Pi skills, unrelated skill retained, zero diagnostics)`);
+  assert.equal(result.skills.find(skill => skill.name === 'anon-writer').disableModelInvocation, true);
+  const { loadProjectContextFiles } = await import(pathToFileURL(path.join(pkg, 'dist/core/resource-loader.js')));
+  const voiceGuide = fs.readFileSync(path.join(root, 'skills/anon-writer/SKILL.md'), 'utf8')
+    .replace(/^---\n[\s\S]*?\n---\n/, '').trim();
+  let context = loadProjectContextFiles({cwd, agentDir});
+  assert.ok(context.some(file => file.path === path.join(agentDir, 'AGENTS.md') &&
+    file.content.includes('Default communication voice:') && file.content.includes(voiceGuide)));
+  // A project install also exposes the default voice through native context loading.
+  execFileSync(binary, ['install', '--root', root, '--harness', 'pi', '-p', '--target', cwd]);
+  context = loadProjectContextFiles({cwd, agentDir});
+  assert.ok(context.some(file => file.path === path.join(cwd, 'AGENTS.md') &&
+    file.content.includes('Default communication voice:') && file.content.includes(voiceGuide)));
+  console.log(`pi-discovery: ok (${ids.length} Pi skills, unrelated skill retained, zero diagnostics, global/project voice loaded)`);
 } finally {
   process.env.HOME = previousHome;
   fs.rmSync(home, {recursive: true, force: true});
