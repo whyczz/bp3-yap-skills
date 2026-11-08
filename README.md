@@ -18,6 +18,7 @@ tool blocking, or runtime code belongs in bp3 control or worker.
 | `ask` | Interview until a buildable request is clear |
 | `search` | Search repo, history, web, archive; report with sources |
 | `red-chair` | Read-only adversarial pass with next steps |
+| `red-chair-design` | Four-pass review of a design artifact: coherence, implementability, ecosystem fit, cut list |
 | `teach` | First-principles explanation grounded in the repo |
 | `dossier` | Deep-dive learning document; explores, never decides |
 | `design` | Proposed design: context, data models, functions, storage, milestones |
