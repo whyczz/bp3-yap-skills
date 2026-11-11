@@ -28,6 +28,9 @@ tool blocking, or runtime code belongs in bp3 control or worker.
 | `verify` | Fresh checks and exact outputs before "done" |
 | `commit` | Commit message: TL;DR, For humans, For LLMs |
 | `add-skill` | Gatekeeper for adding the next skill |
+| `red-ink` | Present an existing design in rounds until the owner is happy; copy-first edits |
+| `auto-red-ink` | Headless red-ink against expert lenses; returns design plus unsettled questions |
+| `expert-cli` | CLI design lens: output, inputs, internals, with CLI rules |
 
 A new skill enters through the `add-skill` gates; scaffolding alone is not approval.
 
