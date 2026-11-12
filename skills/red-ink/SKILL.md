@@ -5,110 +5,171 @@ description: "Present an existing design back to its owner in rounds until they 
 
 # Red ink
 
-Use when a human invokes this skill by name (`/red-ink`) or asks
-to be walked through an existing design until they are happy
-with it: a quest, a design doc, an API proposal. The product is
-the owner's settled judgment, recorded as decisions and applied
-to a working copy one edit at a time. The original is never
-edited.
+```text
+existing artifact
+    |
+    +-- copy --> working copy        (original stays untouched)
+                     |
+    walk:  output -> inputs -> data -> state -> fn -> names -> concepts
+                     |
+    per slice: Observe -> Orient -> Decide -> Act -> IIUC
+                     |
+    owner: "happy / settle"
+                     v
+    decision record + proposed experiments
+```
 
-Use `red-chair` instead for a one-shot adversarial pass with no
-loop. Use `design` instead when no design exists yet to
-present. Use `ask` or `grill` instead when the request itself
-is unclear and there is no artifact. Use `red-chair-design`
-instead for a four-pass written review the owner reads alone.
+```python
+def red_ink(artifact, expert=None):
+    copy = duplicate(artifact)           # original never edited
+    for slice in [output, inputs, data, state, fn, names, concepts]:
+        teach(slice)                     # Observe
+        orient(slice)                    # the 2-4 things that matter
+        decision = ask_one(owner)        # Decide: options + recommendation
+        apply_one_edit(copy, decision)   # Act
+        playback()                       # IIUC: settled / changed / open
+        if owner.happy:
+            break
+    return exit_pack(decisions, open_questions, experiments)
+```
+
+## Context
+
+Reading map for this skill: prose carries context, why, and how
+we got here. Diagrams, pseudocode, and tables carry what we do.
+
+Designs die in review when the owner gets the whole blob at
+once: the read turns into a rubber stamp, and the objections
+surface mid-build, priced as migrations. Red ink slows the
+review down to one slice at a time so each decision lands
+while changing it still costs a sentence.
+
+How we get there shapes the walk below. Output goes first
+because a design that emits the wrong thing earns no points
+for elegant internals. One question per round keeps decisions
+from smearing into each other. The original stays untouched
+because a review that rewrites its own evidence can never be
+re-run. The IIUC closes each round because the owner's
+cheapest correction arrives right after the read, not three
+slices later.
+
+## When this fires
+
+| Case | Fire |
+|---|---|
+| `/red-ink`, “walk me through this design” | this skill |
+| one-shot adversarial pass, no loop | `red-chair` |
+| written four-pass review the owner reads alone | `red-chair-design` |
+| no design exists yet | `design` |
+| the request itself is unclear | `ask` / `grill` |
 
 ## The walk
 
-Present in lens order. Output first, always: a design whose
-output is wrong does not earn an internals discussion. Each
-slice below is one round:
+Output first. A design whose output is wrong earns no internals
+discussion.
 
-1. Output — what the system emits and the decisions it
-   serves: calls, verdict shapes, error codes, exit behavior,
-   or the domain equivalent from the matching expert lens.
-2. Inputs — what the system takes in: args, flags, env,
-   config, files, requests.
-3. Internals, top-down: design/data (shapes, schemas),
-   design/state (lifecycle, derived vs stored), design/fn
-   (functions, edges), variable names (each, one line),
-   concepts (the coined vocabulary a newcomer must learn).
+| Slice | Question it answers |
+|---|---|
+| Output | what it emits: calls, verdict shapes, error codes, exits |
+| Inputs | what it takes in: args, flags, env, config, files |
+| Internals: data | shapes and schemas |
+| Internals: state | lifecycle, stored vs derived |
+| Internals: functions | edges, who does what |
+| Internals: names | every variable and term, one line each |
+| Internals: concepts | the coined vocabulary a newcomer must learn |
 
-When the design's domain has an expert skill (see the expert
-index), its lens supplies the slice definitions and rules for
-the walk. Without an expert, use the generic slices above.
+Domain experts supply slice definitions where one exists
+(see Expert index).
 
-## Rounds (OODA)
+## Round shape (one slice per round)
 
-Every round produces exactly this shape:
+| Phase | Carries |
+|---|---|
+| Observe | the lay of the land, TL;DR first, cited from the artifact |
+| Orient | the 2-4 things that matter, tensions, the turning question |
+| Decide | exactly one detailed question: options + recommended answer. The owner calls it |
+| Act | one edit to the working copy applying that one decision; “no edit” when the call was keep-as-is |
+| IIUC | playback: settled, changed, still open |
 
-- Observe (input): teach the slice — the lay of the land, in
-  plain words, TL;DR first. Cite the artifact; never present
-  from memory of how such systems usually work.
-- Orient (input): what is important at this slice — the two
-  to four things that matter, the tensions, the question this
-  round turns on.
-- Decide (output): exactly one detailed question — the
-  highest-leverage open decision at this slice — with options
-  and a recommended answer. Wait for the owner's call. Record
-  the decision in the owner's words.
-- Act: apply that one settled decision as one edit to the
-  working copy, or record "no edit" when the decision was to
-  keep the design as-is. Never batch unmade decisions into an
-  edit; never edit the original.
-- IIUC: close the round by playing back where the design
-  space stands — settled, changed, still open — for the
-  owner to correct.
+```text
+Observe -> Orient -> Decide -> Act -> IIUC -> next slice
+              ^                                  |
+              +---- owner corrects the read -----+
+```
 
-After each full pass through the lens (output through
-concepts), ask: another pass, or settle? Do not advance a
-slice while its Decide question is unanswered, and do not
-re-present a settled slice unless a later decision changed
-it.
+## Cases
 
-## Exit (owner says they are happy)
+| Situation | Move |
+|---|---|
+| Decide question still unanswered | stay on the slice |
+| owner defers a question | record it under Deliberately open, with an owner; move on only when the owner says so |
+| later decision reopens a settled slice | re-present that slice; the rest stay settled |
+| a full pass completes | ask: another pass, or settle |
+| owner says happy / settle | produce the exit pack, in order |
+| owner adopts the copy | move the working copy over the original (`mv`, never a merge), set the lifecycle status the owner names; the old original survives in git history, and a recovery snapshot is saved first when the tooling offers one |
 
-Present, in this order:
+## Exit pack
 
-1. Decision record: every settled decision, one line each,
-   with before -> after as applied on the copy, and the
-   round that decided it.
-2. The inputs that produced them: Observed (the lay of the
-   land as taught, final form) and Oriented (what mattered,
-   in priority order).
-3. Original path (untouched) and working-copy path.
-4. Deliberately open: questions the owner deferred, each with
-   an owner. Never drop a question silently; a deferred
-   question is a recorded decision to defer.
-5. Final IIUC of the settled design.
-6. Proposed experiments — only when the design implies
-   implementation: Exp N with intent, inspectable output,
-   acceptance that fails today, and depends-on. No
-   implementation implied, no experiments; never pad.
+| # | Item | Contents |
+|---|---|---|
+| 1 | Decision record | every settled decision, one line, before -> after, with its round |
+| 2 | Inputs behind them | Observed (final lay of the land), Oriented (priorities) |
+| 3 | Paths | original (untouched) + working copy |
+| 4 | Deliberately open | deferred questions, each with an owner |
+| 5 | Final IIUC | the settled design in one read |
+| 6 | Proposed experiments | only when implementation follows; each exp written per Experiments below |
+
+## Experiments
+
+Proposed experiments, and any exp walked during a pass, are
+presented in this shape, in this order:
+
+```text
+TL;DR -> demo -> diagram (ascii) -> pseudocode (python)
+      -> tables -> acceptance test (goal block) -> prose
+prose = context, why, how we got here, edge cases
+code  = what we're gonna do
+```
+
+| Part | Carries |
+|---|---|
+| Demo | up front: one worked trace, labeled `observed` or `design trace` |
+| ASCII diagram | the flow at a glance: inputs, outputs, where it can stop |
+| Python pseudocode | the mechanism in one readable pass |
+| Tables | intent, lane, output, acceptance that fails today, depends-on; cases and gates |
+| Acceptance test | one goal-shaped block: `objective`, `prove by`, `done when` (the exact observation) |
+| Prose | context, why the exp exists, how we got here, edge cases |
+
+An exp whose acceptance passes today gets sent back: a check
+that cannot fail is a hope, and hopes do not gate builds. An
+exp with no demo and no runnable goal block is unfinished
+spec. The design file itself gets the same treatment at its
+scale: a Demos section up front, traces honestly labeled.
 
 ## Rules
 
-- Copy first: make the working copy before the first edit
-  and name both paths when presenting the first round.
-- One question per round. Detailed, with options and a
-  recommendation; a round with no Decide produced nothing.
-- The owner is the gate. The loop ends when they say they
-  are happy, or at the full-pass checkpoint when they say
-  settle — never when the questions run out on their own.
-- Decisions are recorded in the owner's words; editorials
-  about why they are wrong belong in Orient, before the
-  call, never as a footnote after it.
-- Stateless: this skill holds no state between sessions.
-  The working copy and the decision record in the transcript
-  are the whole memory.
+| Rule | Why it exists |
+|---|---|
+| copy first; name both paths in round one | the original never takes an edit |
+| one question per round | a round with no Decide produced nothing |
+| owner is the gate | the loop ends on the owner's word |
+| decisions recorded in the owner's words | editorials belong in Orient, before the call |
+| stateless skill | the working copy + transcript carry all memory |
+
+Terms sync with code and data: during names and concepts rounds,
+check every term against the identifiers it becomes (CLI verbs
+and flags, states, ledger fields, files, branches, types,
+variants). Code or data already has a spelling -> the design
+adopts it. Owner renames -> the Act applies the new spelling
+across the working copy and records the matching code/data
+rename as owed in the same change. Two spellings for one concept
+means the decision is still open.
 
 ## Expert index
 
-Lenses live in standalone expert skills; match the design's
-domain before the first round and load that lens:
+| Domain | Lens |
+|---|---|
+| CLI designs | `expert-cli` (calls/verdicts/error codes; args/flags/env; data/state/fn/names/concepts) |
 
-- CLI designs: `expert-cli` (calls/verdicts/error codes;
-  args/flags/env; data/state/fn/names/concepts).
-
-New experts enter through the add-skill gates, one at a
-time, and are added to this index as a named edit.
+New experts enter through the add-skill gates, one at a time,
+and join this index as a named edit.
